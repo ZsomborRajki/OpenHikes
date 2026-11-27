@@ -134,6 +134,11 @@ build`, `iOS Release build`, `Unsigned iOS archive`, `Thread sanitizer` and
   local Xcode 27.x matches only while `xcrun swift --version` says 6.4 too.
   While CI ran Xcode 26.6, that version difference broke `main` three times
   with errors no local build could show.
+- **A release is built with the newest Xcode the image has**, 27.2, pinned in
+  `testflight.yml`. Code behind a gate on the SDK is compiled out of an
+  archive from an older one, and ships to nobody. `Unsigned iOS archive`
+  builds with the same Xcode, refuses to differ from it, and fails when the
+  closed iPhone Duo's layout is not in the binary.
 - **CodeQL is the exception.** `codeql.yml` stays on `macos-26` with Xcode 26.6
   until a CodeQL bundle supports Swift 6.4. That makes it the one job
   compiling with the older Swift and SDK, so it catches what Xcode 27 accepts
@@ -197,7 +202,8 @@ either: the second run waits silently on the first run's build lock.
 ### The iPhone Duo
 
 - **No gate runs on a Duo.** Its runtime is one CI's Xcode 27.0 lacks, so the
-  27.1 SDK's Duo APIs do not exist where CI compiles (*CI* has the gate).
+  27.1 SDK's Duo APIs do not exist where CI's tests compile (*CI* has the
+  gate, and the Xcode a release is built with).
 - **Give hinge the pool device every time** (`-d "$udid"`): without `-d` it
   folds the only booted iPhone Duo, which on a shared machine can be another
   session's. Its runtime, its poses and how XCTest sees it are *The iPhone

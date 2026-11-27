@@ -187,9 +187,10 @@ Copernicus DEM as the AWS bucket held it on 2026-11-26.
 - **It needs a runtime of its own, which runs no other device:** iOS 27.1 as
   Xcode 27.1 installed it, and a build of iOS 27.2 for the Duo alone under
   Xcode 27.2. CI's Xcode 27.0 has neither, so no gate runs on a Duo, and the
-  27.1 SDK's Duo APIs do not exist where CI compiles (*CI* in `AGENTS.md`
-  has the gate). Templates and the pool pick the newest runtime that runs
-  their device type, never just the newest.
+  27.1 SDK's Duo APIs do not exist where CI's tests compile (*CI* in
+  `AGENTS.md` has the gate, and the Xcode a release is built with). Templates
+  and the pool pick the newest runtime that runs their device type, never
+  just the newest.
 - **It boots closed**, on the cover display (466 × 678 points).
   `Scripts/duo-pose.sh open --device <udid>` unfolds it to the inner display
   (669 × 951, upright) and reads the display state back.

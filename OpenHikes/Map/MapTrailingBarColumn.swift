@@ -51,8 +51,11 @@
 //  on every display.
 //
 //  `bar(onEdge:extent:)` is iOS 27.1's, behind the gate
-//  `HorizontalSheetToolbar.swift` argues for: CI's Xcode 27.0 compiles
-//  neither, and only the SDK's SwiftUI version tells the two apart.
+//  `HorizontalSheetToolbar.swift` argues for: the Xcode CI tests with
+//  compiles neither, and only the SDK's SwiftUI version tells the two apart.
+//  An archive from that Xcode therefore ships without any of this. A release
+//  is built with one that has it, and CI's archive job fails when the call
+//  below is not in the binary (*CI* in `AGENTS.md`).
 //
 
 #if os(iOS)
