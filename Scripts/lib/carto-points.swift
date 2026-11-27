@@ -783,6 +783,15 @@ func svgSize(_ path: String) -> (width: Double, height: Double) {
     return (width, height)
 }
 
+/// Whether the SVG at `path` names no color for any of its shapes, which
+/// draws every one of them black.
+func svgNamesNoColor(_ path: String) -> Bool {
+    let text = read(path)
+    return ["fill", "stroke", "style", "color"].allSatisfy { name in
+        text.range(of: #"\b\#(name)\s*[=:]"#, options: .regularExpression) == nil
+    }
+}
+
 func assetName(_ path: String) -> String {
     "carto-" + path.replacingOccurrences(of: "symbols/", with: "")
         .replacingOccurrences(of: ".svg", with: "")
@@ -794,8 +803,10 @@ func icon(_ properties: [String: String]) -> Icon {
     var width = value("marker-width").map { number($0, in: "marker-width") }
     var height = value("marker-height").map { number($0, in: "marker-height") }
     var asset: String?
+    var drawnBlack = false
     if case let .url(path)? = value("marker-file") {
         let size = svgSize(path)
+        drawnBlack = svgNamesNoColor(path)
         // A width or a height alone keeps the icon's shape.
         switch (width, height) {
         case (nil, nil): (width, height) = (size.width, size.height)
@@ -815,8 +826,13 @@ func icon(_ properties: [String: String]) -> Icon {
     return Icon(
         asset: asset,
         // An icon with no fill keeps its own colors, as Carto's bus station
-        // does for its white background; Mapnik's ellipse is blue.
-        fill: value("marker-fill").map { color($0, in: "marker-fill").hex } ?? (asset == nil ? "#0000FF" : nil),
+        // does for its white background; Mapnik's ellipse is blue. One whose
+        // picture names no color is drawn black, as an SVG's shapes are by
+        // default, and says so, so that a palette other than Carto's sets it
+        // in its own color as it does every icon with a fill: the cave
+        // entrance's, black on the dark map's ground otherwise.
+        fill: value("marker-fill").map { color($0, in: "marker-fill").hex }
+            ?? (asset == nil ? "#0000FF" : drawnBlack ? "#000000" : nil),
         width: width ?? 10,
         height: height ?? 10,
         opacity: value("marker-opacity").map { number($0, in: "marker-opacity") },

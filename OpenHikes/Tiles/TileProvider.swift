@@ -52,10 +52,11 @@ nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     let durableQuota: DurableTileQuota?
     /// Whether selecting this source requires the paid Pro unlock.
     ///
-    /// The app is usable, and fully offline-capable, without ever paying: the
-    /// two keyless sources carry no flag here. What the unlock buys is access
-    /// to the commercial sources, whose own plans the app pays for per
-    /// tile served — which is the reason a gate exists at all.
+    /// The app is usable, and fully offline-capable, without ever paying:
+    /// the OpenHikes map, openstreetmap.org's and Apple's carry no flag here.
+    /// What the unlock buys is access to the commercial sources, whose own
+    /// plans the app pays for per tile served, and ``openHikesDark``, by the
+    /// owner's decision.
     let requiresPaidAccess: Bool
     /// `Secrets.plist` key holding this provider's API key, for providers that need one. `nil` if keyless.
     let apiKeyPlistKey: String?
@@ -224,6 +225,11 @@ nonisolated extension TileProvider {
     /// ``VectorTilePalette/dark``. Second in the list, beside the map it is
     /// the night's half of.
     ///
+    /// Behind OpenHikes Pro, by the owner's decision, though nobody bills
+    /// for its tiles: it is a style of the free map rather than a source of
+    /// its own, so a country downloaded for nothing is drawn on it for a
+    /// subscriber, and needs no key, so a build without any can sell it.
+    ///
     /// An id of its own, because a tile's key is its provider's and the two
     /// maps' pictures of one tile differ. Nothing else is its own: the
     /// archives, the countries, the language and the redraws when any of
@@ -248,7 +254,7 @@ nonisolated extension TileProvider {
         attribution: TileAttribution([.openStreetMap, .esaWorldCover]),
         supportsBulkDownload: false,
         durableQuota: nil,
-        requiresPaidAccess: false,
+        requiresPaidAccess: true,
         apiKeyPlistKey: nil,
         systemStyle: nil,
         vectorSource: .openHikesPlanet,
@@ -293,9 +299,9 @@ nonisolated extension TileProvider {
     /// edges, clearings, scree, bare rock — which is what a hiker finds their
     /// way by on the ground.
     ///
-    /// Free for the reason ``appleMaps`` is: ``requiresPaidAccess`` exists
-    /// because the commercial sources bill per tile served, and this draws no
-    /// tile of anybody's. Nothing is fetched, cached or auto-saved by the app.
+    /// Free for the reason ``appleMaps`` is: the commercial sources behind
+    /// ``requiresPaidAccess`` bill per tile served, and this draws no tile of
+    /// anybody's. Nothing is fetched, cached or auto-saved by the app.
     /// Unlike ``appleMaps``, though, it is not cheap to look at and it is not
     /// there offline: MapKit streams the imagery itself and offers no public
     /// way to download it, so the summary says it needs a connection rather

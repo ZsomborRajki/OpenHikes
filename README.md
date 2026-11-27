@@ -17,7 +17,7 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 - **Walking a saved trail**, with progress along it, the time left shown on the line ahead, a history of past walks and a shareable photo card.
 - **Junction warnings** while you follow a trail: the phone says which way to go before each fork, and the watch taps. Off until you turn them on from the map.
 - **Statistics**: an interactive elevation profile, the segments between a hike's stops, overall and moving average speed, surface and Swiss Alpine Club difficulty from OpenStreetMap, and yearly and all-time totals.
-- **Maps**: the OpenHikes map, drawn on the device from OpenStreetMap's data in light or dark colors, with national parks and nature reserves outlined and named along their borders, openstreetmap.org's own tiles, Apple's standard and satellite maps, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors, with OpenStreetMap's marked hiking routes as a layer you can switch off and every hike in your library drawn faintly on top. Tilting the map raises the terrain in 3D under the satellite map and the tile styles. A route's map can be downloaded where the provider allows it, and a switch in Settings saves the tiles you browse around a hike.
+- **Maps**: the OpenHikes map, drawn on the device from OpenStreetMap's data in light colors, or in dark ones with Pro, with national parks and nature reserves outlined and named along their borders, openstreetmap.org's own tiles, Apple's standard and satellite maps, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors, with OpenStreetMap's marked hiking routes as a layer you can switch off and every hike in your library drawn faintly on top. Tilting the map raises the terrain in 3D under the satellite map and the tile styles. A route's map can be downloaded where the provider allows it, and a switch in Settings saves the tiles you browse around a hike.
 - **Photos** taken on a walk or picked from the library, pinned to where on the trail they were taken.
 - **Weather** from WeatherKit: now, the next twelve hours and the week ahead.
 - **Widget and Live Activity**: the trail, or the recording in progress, on the Home Screen, the Lock Screen and in the Dynamic Island.
@@ -28,13 +28,13 @@ There is no OpenHikes account and no server holding your hikes: they live on the
 - **Community**: browse what others published, with no account needed, and publish your own, which a person reviews before anyone else sees it. Waymarked routes from OpenStreetMap, with photos from Wikimedia Commons, fill the same list.
 - **English, German, French, Spanish, Italian, Russian, Polish, Ukrainian, Romanian and Dutch**, following the device's language.
 
-**OpenHikes Pro**, a monthly subscription, unlocks the paid map styles (Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors), offline Stadia maps (Thunderforest's can't be downloaded ahead) and Stadia elevation for trails that have none. Everything else is free, the community included.
+**OpenHikes Pro**, a monthly subscription, unlocks the paid map styles (OpenHikes Dark, Stadia Outdoors, Stamen Terrain and Thunderforest Outdoors), offline Stadia maps (Thunderforest's can't be downloaded ahead) and Stadia elevation for trails that have none. Everything else is free, the community included.
 
 ## Requirements
 
 - Xcode 27 or later. The app deploys to iOS 18.4 on iPhone and iPad, and its embedded watch app to watchOS 11.0. An Apple silicon Mac runs it as an iPad app (*My Mac (Designed for iPad)* in Xcode).
 - An Apple development team that can sign WeatherKit, both App Groups, the iCloud container, push and Time Sensitive Notifications, and HealthKit.
-- Optionally, API keys for Stadia and Thunderforest, each with a paid plan from its vendor. The OpenHikes map, which a new install opens on, openstreetmap.org's tiles and Apple's maps need no key, and a build without keys shows the paid styles locked.
+- Optionally, API keys for Stadia and Thunderforest, each with a paid plan from its vendor. The OpenHikes map, which a new install opens on, OpenHikes Dark, openstreetmap.org's tiles and Apple's maps need no key, and a build without keys shows the Stadia and Thunderforest styles locked.
 
 ## Setup
 

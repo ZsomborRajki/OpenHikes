@@ -21,6 +21,9 @@
 //  - Whatever is read rather than seen, a name, a path, an icon, a
 //    border, is light: Carto's black is nearly white, and its pale grays,
 //    which mark what is closed or matters least, are dim.
+//  - A road's number has no halo and stands on the road's own surface, so
+//    its ink is nearly white, tinted with the road's hue, and keeps 4.5:1
+//    against the plate as a street's name keeps it against the ground.
 //  - A halo is the color of the dark ground, so a name is cut out of
 //    whatever it crosses as Carto's white halo cuts one out.
 //
@@ -163,7 +166,7 @@ nonisolated enum VectorTileDarkPalette {
     static let surfaces: [Pair] = [
         ("#E892A2", "#93405A"), // a motorway
         ("#F9B29C", "#9B5338"), // a trunk road
-        ("#FCD6A4", "#8E6D30"), // a primary road
+        ("#FCD6A4", "#86662B"), // a primary road
         ("#F7FABF", "#70733A"), // a secondary road
         ("#FFFFFF", "#4D5157"), // a tertiary road, a street, a service road
         ("#EDEDED", "#44474C"), // a living street
@@ -200,10 +203,10 @@ nonisolated enum VectorTileDarkPalette {
         ("#4D80B3", "#82B5E8"), // water
         ("#008000", "#62BE68"), // a protected area
         ("#82643A", "#C59D66"), // aboriginal lands
-        ("#620728", "#F5BCCA"), // a motorway's number
-        ("#5F1C0C", "#F7C6B4"), // a trunk road's
-        ("#503000", "#F3DBAA"), // a primary road's
-        ("#364000", "#E4E9A2"), // a secondary road's
+        ("#620728", "#FFE6EC"), // a motorway's number
+        ("#5F1C0C", "#FFEEE6"), // a trunk road's
+        ("#503000", "#FFF5E2"), // a primary road's
+        ("#364000", "#FDFEE6"), // a secondary road's
         ("#3B3B3B", "#E1E3E6"), // a tertiary road's
         ("#741334", "#E9A5B7"), // a motorway's arrow
         ("#612617", "#EBB09C"), // a trunk road's

@@ -10653,6 +10653,7 @@
           "icons" : [
             {
               "asset" : "carto-natural-cave",
+              "fill" : "#000000",
               "height" : 14,
               "width" : 14
             }

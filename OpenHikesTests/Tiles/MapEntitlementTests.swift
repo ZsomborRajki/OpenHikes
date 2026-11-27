@@ -138,6 +138,7 @@ struct MapEntitlementTests {
             #expect(state.tapAction(for: .openStreetMap) == .allow)
             #expect(state.tapAction(for: .appleMaps) == .allow)
             #expect(state.tapAction(for: .appleSatellite) == .allow)
+            #expect(state.tapAction(for: .openStreetMapRaster) == .allow)
         }
     }
 

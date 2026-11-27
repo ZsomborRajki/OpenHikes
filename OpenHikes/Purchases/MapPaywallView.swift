@@ -13,6 +13,10 @@
 //  has no right to push a paying feature onto. The free map is not a crippled
 //  version of the paid one; it is the one that costs nothing to serve.
 //
+//  OpenHikes Dark is the one thing here nobody bills for: the free map in
+//  dark colors, behind Pro by the owner's decision. So the copy says the
+//  *commercial* maps are billed per view, never that every paid one is.
+//
 //  **Everything listed here has to be something the subscription actually
 //  unlocks, and everything it unlocks has to be listed here.** That is not a
 //  style rule: it is what App Review checks a subscription screen against, and
@@ -70,6 +74,13 @@ struct MapPaywallView: View {
     @State private var showNothingToRestore = false
 
     private static let features: [(icon: String, title: LocalizedStringKey, detail: LocalizedStringKey)] = [
+        // The name and the summary *Map Modes* gives the card that opens
+        // this, word for word.
+        (
+            "moon.fill",
+            "OpenHikes Dark",
+            "The OpenHikes map in dark colors. Countries you download are drawn on it too."
+        ),
         (
             "mountain.2.fill",
             "Stadia Outdoors",
@@ -101,7 +112,7 @@ struct MapPaywallView: View {
         (
             "heart.fill",
             "Keeps OpenStreetMap Free",
-            "The paid maps are billed per view. Your subscription covers them, so OpenStreetMap stays free."
+            "The commercial maps are billed per view. Your subscription covers them, so OpenStreetMap stays free."
         ),
     ]
 
@@ -196,17 +207,18 @@ struct MapPaywallView: View {
             Text("Read the ground you hike on")
                 .font(.title2.weight(.semibold))
             // Named rather than collapsed into "them", which is what this
-            // used to say. Three styles are unlocked and only Stadia's two may
+            // used to say. Four styles are unlocked and only Stadia's two may
             // be downloaded ahead of a walk: `TileProvider.stadiaOutdoors` and
             // `stamenTerrain` set `supportsBulkDownload`, and Thunderforest
             // does not, because their licence reserves pre-caching for a plan
             // this app is not on. A header promising that Pro "saves them to
             // your phone" sold the wrong half of the subscription to anybody
-            // who bought it for Thunderforest.
+            // who bought it for Thunderforest. OpenHikes Dark is offline where
+            // a downloaded country is, as the free map is, and its row says so.
             Text(
                 """
-                    Pro adds three outdoor map styles built for trails, and both Stadia styles save a \
-                    whole route to your phone for a hike with no signal.
+                    Pro adds OpenHikes Dark and three outdoor map styles built for trails, and both \
+                    Stadia styles save a whole route to your phone for a hike with no signal.
                     """
             )
             .font(.subheadline)
