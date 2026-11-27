@@ -92,7 +92,13 @@ struct OfflineCountryRow: View {
         } else if isDamaged(download) {
             Text(Self.message(for: .damaged))
         } else if let record = countries.installed[country.id] {
-            Text("Downloaded · \(Self.bytes(record.byteCount))")
+            // Whether it has its heights, which *Elevation Data* decides
+            // and the size alone would not say.
+            if record.hasElevation {
+                Text("Downloaded with elevation · \(Self.bytes(record.byteCount))")
+            } else {
+                Text("Downloaded without elevation · \(Self.bytes(record.byteCount))")
+            }
         } else {
             Text(Self.bytes(countries.byteCount(of: country)))
         }

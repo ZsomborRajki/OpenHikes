@@ -146,7 +146,7 @@ struct OfflineCountriesDownloadTests {
             let setup = await setUp(
                 in: directory,
                 offering: [country],
-                freeBytes: country.byteCount(withDetail: false) + OfflineCountries.spareBytes - 1
+                freeBytes: country.byteCount(withDetail: false, withElevation: true) + OfflineCountries.spareBytes - 1
             )
 
             setup.countries.download(country)

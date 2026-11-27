@@ -42,6 +42,7 @@ nonisolated final class OfflineMapsUITests: XCTestCase {
         )
         XCTAssertTrue(app.staticTexts["Downloads are for the OpenHikes map only."].exists)
         XCTAssertTrue(app.switches.matching(identifier: "offline-maps-extra-detail").firstMatch.exists)
+        XCTAssertTrue(app.switches.matching(identifier: "offline-maps-elevation-data").firstMatch.exists)
         keepScreenshot("2 Offline Maps at the sheet's middle, over the map", of: app)
 
         raiseSheet(in: app)

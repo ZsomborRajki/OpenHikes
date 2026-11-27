@@ -128,11 +128,15 @@ struct OfflineCountryManifestTests {
             trails: Data(count: 3),
             elevation: Data(count: 4)
         )
-        #expect(country.files(withDetail: false).map(\.role) == [.basemap, .extras, .trails, .elevation])
+        let base: [OfflineCountryManifest.Role] = [.basemap, .extras, .trails, .elevation]
+        #expect(country.files(withDetail: false, withElevation: true).map(\.role) == base)
+        let noHeights: [OfflineCountryManifest.Role] = [.basemap, .extras, .detail, .detailExtras, .trails]
+        #expect(country.files(withDetail: true, withElevation: false).map(\.role) == noHeights)
+        #expect(country.byteCount(withDetail: false, withElevation: false) == 14)
         let everything: [OfflineCountryManifest.Role] = [.basemap, .extras, .detail, .detailExtras, .trails, .elevation]
-        #expect(country.files(withDetail: true).map(\.role) == everything)
-        #expect(country.byteCount(withDetail: false) == 18)
-        #expect(country.byteCount(withDetail: true) == 40)
+        #expect(country.files(withDetail: true, withElevation: true).map(\.role) == everything)
+        #expect(country.byteCount(withDetail: false, withElevation: true) == 18)
+        #expect(country.byteCount(withDetail: true, withElevation: true) == 40)
     }
 
     @Test("a country listing a file under an unsafe name is left off whole")
@@ -173,7 +177,7 @@ struct OfflineCountryManifestTests {
         )
         let manifest = try JSONDecoder().decode(OfflineCountryManifest.self, from: json)
         let country = try #require(manifest.readableCountries.first)
-        #expect(country.byteCount(withDetail: true) == 460_284_649)
+        #expect(country.byteCount(withDetail: true, withElevation: true) == 460_284_649)
         #expect(country.files.first?.fileName == "SI-20261117.pmtiles")
     }
 

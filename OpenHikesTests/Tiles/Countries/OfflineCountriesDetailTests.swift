@@ -64,7 +64,8 @@ struct OfflineCountriesDetailTests {
 
             harness.countries.download(slovenia)
             #expect(Set(harness.downloader.requests.map(\.key.role)) == Set(slovenia.files.map(\.role)))
-            #expect(harness.countries.downloads["SI"]?.byteCount == slovenia.byteCount(withDetail: true))
+            let everything = slovenia.byteCount(withDetail: true, withElevation: true)
+            #expect(harness.countries.downloads["SI"]?.byteCount == everything)
             try harness.land(allFiles)
             await settleDelegateHop(until: "the map has the area") { !harness.archives.isEmpty }
 

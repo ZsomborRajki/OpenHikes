@@ -104,7 +104,7 @@ struct OfflineCountriesTrailsTests {
             #expect(harness.countries.installed["SI"]?.files.map(\.role) == roles)
             #expect(harness.countries.installed["SI"]?.hasDetail == withDetail)
             #expect(harness.store.installed().first?.country == withTrails)
-            #expect(withTrails.files(withDetail: withDetail).allSatisfy(harness.fileExists))
+            #expect(withTrails.files(withDetail: withDetail, withElevation: true).allSatisfy(harness.fileExists))
         }
     }
 

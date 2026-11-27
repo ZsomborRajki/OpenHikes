@@ -79,6 +79,9 @@ final class OfflineCountryDownload {
     /// Whether it brings zoom 15.
     var hasDetail: Bool { files.contains(where: \.role.isDetail) }
 
+    /// Whether it brings the heights.
+    var hasElevation: Bool { files.contains(where: \.role.isElevation) }
+
     var hasFailed: Bool {
         if case .failed = phase { return true }
         return false

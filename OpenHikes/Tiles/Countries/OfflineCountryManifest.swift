@@ -102,14 +102,16 @@ nonisolated struct OfflineCountryManifest: Codable, Equatable, Sendable {
         var outline: [[[Double]]]
         var files: [File]
 
-        /// The files a download takes, with *Extra Detail* or without.
-        func files(withDetail: Bool) -> [File] {
-            files.filter { withDetail || !$0.role.isDetail }
+        /// The files a download takes, with *Extra Detail* or without, and
+        /// with *Elevation Data* or without.
+        func files(withDetail: Bool, withElevation: Bool) -> [File] {
+            files.filter { (withDetail || !$0.role.isDetail) && (withElevation || !$0.role.isElevation) }
         }
 
-        /// What downloading it costs, in bytes, with *Extra Detail* or without.
-        func byteCount(withDetail: Bool) -> Int64 {
-            files(withDetail: withDetail).reduce(0) { $0 + $1.byteCount }
+        /// What downloading it costs, in bytes, with *Extra Detail* or
+        /// without, and with *Elevation Data* or without.
+        func byteCount(withDetail: Bool, withElevation: Bool) -> Int64 {
+            files(withDetail: withDetail, withElevation: withElevation).reduce(0) { $0 + $1.byteCount }
         }
     }
 
@@ -158,11 +160,13 @@ nonisolated struct OfflineCountryManifest: Codable, Equatable, Sendable {
         /// tile server lists. Every square it covers is a tile of it, one at
         /// sea level included, so a square that is no tile of it is one it
         /// says nothing about
-        /// (``OfflineCountryArchives/elevationSquares(_:)``). Added to
-        /// builds already listed, as the day hikes were.
+        /// (``OfflineCountryArchives/elevationSquares(_:)``). What
+        /// *Elevation Data* adds. Added to builds already listed, as the day
+        /// hikes were.
         case elevation = "elevation"
 
         var isDetail: Bool { self == .detail || self == .detailExtras }
+        var isElevation: Bool { self == .elevation }
     }
 
     struct Bounds: Codable, Equatable, Hashable, Sendable {

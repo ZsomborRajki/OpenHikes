@@ -123,6 +123,10 @@ nonisolated enum SettingsKey {
     /// and most of its points, for about twice the space — *Extra Detail*
     /// under *Offline Maps*. Read and written by ``OfflineCountries``.
     static let offlineCountriesDetail = "settings.offlineCountriesDetail"
+    /// Whether a downloaded country brings its heights too, so a line there
+    /// is given its elevation profile with no signal — *Elevation Data*
+    /// under *Offline Maps*. Read and written by ``OfflineCountries``.
+    static let offlineCountriesElevation = "settings.offlineCountriesElevation"
     /// Whether the map around the selected hike is kept as it is browsed —
     /// *Auto-Save Tiles* in Settings; see ``AutoSaveController``, which reads
     /// it at every selection rather than capturing it.
@@ -276,6 +280,12 @@ nonisolated enum SettingsDefault {
     /// with a signal. The hiker short of space turns it off and keeps every
     /// path, road and summit for half the bytes.
     static let offlineCountriesDetail = true
+    /// On, as *Extra Detail* is. In the mountains the heights cost about a
+    /// tenth of an area's map, and without them a trail drawn or found there
+    /// has no climb with no signal. Where they cost far more — a vast area,
+    /// or ice, such as Brazil, China, Greenland or Antarctica — the row's
+    /// size says so before the download, and the hiker turns them off.
+    static let offlineCountriesElevation = true
     /// Off, by the owner's decision. It was a switch on every hike, on until
     /// turned off, while browsing was the only way the OpenStreetMap map
     /// could be kept: its tile policy forbids a bulk download. That map is

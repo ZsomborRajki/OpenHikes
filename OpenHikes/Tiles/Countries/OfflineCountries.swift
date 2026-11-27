@@ -20,7 +20,9 @@
 //  *Extra Detail* decides which files an area takes: to zoom 14 always, and
 //  zoom 15, with its buildings and most of its points, when it is on.
 //  Turning it on brings zoom 15 to every area already down; turning it off
-//  deletes it from them and keeps the areas (``reconcile()``). A file the
+//  deletes it from them and keeps the areas (``reconcile()``). *Elevation
+//  Data* does the same for the heights' squares, and each area's record says
+//  whether it has them, which its row says too. A file the
 //  list names for a build already down that the area did not take is
 //  brought the same way, and ahead of any zoom 15 the area lacks: the day
 //  hikes' squares and the heights' squares, which builds already listed
@@ -99,6 +101,8 @@ final class OfflineCountries {
     private(set) var downloads: [String: OfflineCountryDownload] = [:]
     /// Whether an area brings its zoom 15 too: *Extra Detail*.
     private(set) var includesDetail: Bool
+    /// Whether an area brings its heights too: *Elevation Data*.
+    private(set) var includesElevation: Bool
     private(set) var holdings = Holdings.unread
     /// The files of each downloaded area that the archives' last opening
     /// could not open, by area code: still the index's, and on no map.
@@ -163,6 +167,8 @@ final class OfflineCountries {
         self.checksFile = checksFile
         includesDetail = defaults?.object(forKey: SettingsKey.offlineCountriesDetail) as? Bool
             ?? SettingsDefault.offlineCountriesDetail
+        includesElevation = defaults?.object(forKey: SettingsKey.offlineCountriesElevation) as? Bool
+            ?? SettingsDefault.offlineCountriesElevation
         downloader?.onEvent = { [weak self] event in self?.handle(event) }
     }
 
@@ -172,39 +178,51 @@ final class OfflineCountries {
     /// server, and the device's own lists are not ones it cannot read.
     var isAvailable: Bool { server != nil && holdings != .unreadable }
 
-    /// Brings every area down, and not coming down, to *Extra Detail*'s
-    /// setting, and to the files the list now names for its build. A
-    /// download under way is left to finish, and brought to it then. An area
-    /// the server has a newer build of is left for its update to bring zoom
-    /// 15: the server deletes a build it has moved past, and asking for that
-    /// build's files failed at every launch. So is one with a file that
-    /// would not open, for the hiker's *Try Again*, which brings zoom 15
-    /// after it: here it would come down again unasked at every launch, even
-    /// where the device only refused a read for the moment. Nothing is
-    /// brought while the launch picks up what was coming down
+    /// Brings every area down, and not coming down, to *Extra Detail*'s and
+    /// *Elevation Data*'s settings, and to the files the list now names for
+    /// its build. What a switch turned off goes, and the area stays. A
+    /// download under way is left to finish, and brought to them then. An
+    /// area the server has a newer build of is left for its update to bring
+    /// what a switch turned on: the server deletes a build it has moved
+    /// past, and asking for that build's files failed at every launch. So is
+    /// one with a file that would not open, for the hiker's *Try Again*,
+    /// which brings it after: here it would come down again unasked at every
+    /// launch, even where the device only refused a read for the moment.
+    /// Nothing is brought while the launch picks up what was coming down
     /// (``isRecovering``); the launch brings the areas once it has.
     private func reconcile() {
         guard !isRecovering else { return }
         for record in installed.values where downloads[record.country.id] == nil {
-            let current = offeredBuild(of: record)
-            if includesDetail, !record.hasDetail {
-                guard update(for: record.country.id) == nil, !needsRepair(record.country.id) else { continue }
-                download(current ?? record.country)
-            } else if !includesDetail, record.hasDetail {
-                let before = installed
-                var stripped = record
-                stripped.hasDetail = false
-                installed[record.country.id] = stripped
-                guard commitIndex(restoring: before) else { continue }
-                forgetUnopenable(record.files.filter(\.role.isDetail).map(\.role), of: record.country.id)
-                reopenArchives()
-                store.remove(record.files.filter(\.role.isDetail), keeping: Array(installed.values))
-            } else if let current, !needsRepair(record.country.id), !filesToFetch(for: current).isEmpty {
-                // A file its build gained since it came down: its day hikes,
-                // or its heights.
-                download(current)
+            let id = record.country.id
+            let unwanted = record.files.filter { !wants($0.role) }
+            if !unwanted.isEmpty {
+                guard strip(unwanted, from: record) else { continue }
             }
+            guard let kept = installed[id], update(for: id) == nil, !needsRepair(id) else { continue }
+            // What a switch turned on, or a file its build gained since it
+            // came down: its day hikes, or its heights.
+            download(offeredBuild(of: kept) ?? kept.country)
         }
+    }
+
+    /// Whether the switches ask for a file of `role`.
+    private func wants(_ role: OfflineCountryManifest.Role) -> Bool {
+        (includesDetail || !role.isDetail) && (includesElevation || !role.isElevation)
+    }
+
+    /// Deletes `files`, what a switch turned off, from the area `record` is
+    /// of, which keeps the rest. Answers whether the index on disk says so.
+    private func strip(_ files: [OfflineCountryManifest.File], from record: Record) -> Bool {
+        let before = installed
+        var stripped = record
+        if files.contains(where: \.role.isDetail) { stripped.hasDetail = false }
+        if files.contains(where: \.role.isElevation) { stripped.hasElevation = false }
+        installed[record.country.id] = stripped
+        guard commitIndex(restoring: before) else { return false }
+        forgetUnopenable(files.map(\.role), of: record.country.id)
+        reopenArchives()
+        store.remove(files, keeping: Array(installed.values))
+        return true
     }
 
     /// The area `record` is of, as the list offers it now, where the list
@@ -305,21 +323,28 @@ final class OfflineCountries {
         }
     }
 
-    /// What downloading `country` asks for: every file *Extra Detail* says,
-    /// less those of the same build already down and opened. One the map
-    /// could not open is asked for again. Of an area down without zoom 15,
-    /// the rest comes first and zoom 15 after it (``reconcile()``): in one
-    /// download, a zoom 15 that failed would keep its day hikes off the
-    /// device even once they had landed, and turning *Extra Detail* off,
-    /// which stops a download of zoom 15 alone, would not stop it.
+    /// What downloading `country` asks for: every file *Extra Detail* and
+    /// *Elevation Data* say, less those of the same build already down and
+    /// opened. One the map could not open is asked for again. Of an area
+    /// down without zoom 15, the rest comes first and zoom 15 after it
+    /// (``reconcile()``): in one download, a zoom 15 that failed would keep
+    /// its day hikes off the device even once they had landed, and turning
+    /// *Extra Detail* off, which stops a download of zoom 15 alone, would not
+    /// stop it. Of one down without its heights, the same holds for them:
+    /// the map's files, then the heights, then zoom 15.
     func filesToFetch(for country: Country) -> [OfflineCountryManifest.File] {
-        let wanted = country.files(withDetail: includesDetail)
+        let wanted = country.files(withDetail: includesDetail, withElevation: includesElevation)
         guard let record = installed[country.id], record.country.build == country.build else { return wanted }
         let failed = unopenable[country.id] ?? []
         let held = Set(record.files.filter { !failed.contains($0.role) }.map(\.fileName))
-        let owed = wanted.filter { !held.contains($0.fileName) }
-        guard !record.hasDetail, owed.contains(where: { !$0.role.isDetail }) else { return owed }
-        return owed.filter { !$0.role.isDetail }
+        var owed = wanted.filter { !held.contains($0.fileName) }
+        if !record.hasDetail, owed.contains(where: { !$0.role.isDetail }) {
+            owed.removeAll { $0.role.isDetail }
+        }
+        if !record.hasElevation, owed.contains(where: { !$0.role.isElevation }) {
+            owed.removeAll { $0.role.isElevation }
+        }
+        return owed
     }
 
     /// Stops `id`'s download and keeps nothing it brought. A launch that has
@@ -436,7 +461,8 @@ final class OfflineCountries {
         installed[country.id] = Record(
             country: country,
             installedAt: now(),
-            hasDetail: download.hasDetail || (sameBuild && previous?.hasDetail == true)
+            hasDetail: download.hasDetail || (sameBuild && previous?.hasDetail == true),
+            hasElevation: download.hasElevation || (sameBuild && previous?.hasElevation == true)
         )
         // The old build goes only once the index on disk names the new one:
         // otherwise a relaunch finds neither, and sweeps the new one.
@@ -511,7 +537,7 @@ extension OfflineCountries {
     }
 }
 
-// MARK: - Extra Detail
+// MARK: - Extra Detail and Elevation Data
 
 extension OfflineCountries {
     /// Turns *Extra Detail* on, which brings zoom 15 to every area already
@@ -523,6 +549,23 @@ extension OfflineCountries {
         if !isOn {
             // Bringing only zoom 15 to an area already down is no longer wanted.
             for (id, download) in downloads where download.files.allSatisfy(\.role.isDetail) {
+                cancel(id)
+            }
+        }
+        reconcile()
+    }
+
+    /// Turns *Elevation Data* on, which brings the heights to every area
+    /// already down, or off, which deletes them from them and keeps the
+    /// areas.
+    func setIncludesElevation(_ isOn: Bool) {
+        guard isOn != includesElevation else { return }
+        includesElevation = isOn
+        defaults?.set(isOn, forKey: SettingsKey.offlineCountriesElevation)
+        if !isOn {
+            // Bringing only the heights to an area already down is no
+            // longer wanted.
+            for (id, download) in downloads where download.files.allSatisfy(\.role.isElevation) {
                 cancel(id)
             }
         }
@@ -636,49 +679,6 @@ extension OfflineCountries {
     @concurrent
     private static func cache(_ manifest: OfflineCountryManifest, in store: OfflineCountryStore) async {
         try? store.cache(manifest)
-    }
-
-    /// What an opening of the archives made of the index: the areas the map
-    /// draws, and the files that would not open.
-    nonisolated struct Opening: Sendable {
-        var countries: [OfflineCountryArchives.Country] = []
-        var unopenable: [String: Set<OfflineCountryManifest.Role>] = [:]
-    }
-
-    /// Opens every file the index names. An area whose basemap will not open
-    /// is on no map, and one whose other files will not open is drawn
-    /// without them.
-    @concurrent
-    private static func open(_ records: [Record], in store: OfflineCountryStore) async -> Opening {
-        var opening = Opening()
-        for record in records {
-            let id = record.country.id
-            var failed = Set<OfflineCountryManifest.Role>()
-            var opened: [OfflineCountryManifest.Role: PMTilesArchive] = [:]
-            for file in record.files {
-                do {
-                    opened[file.role] = try PMTilesArchive(contentsOf: store.fileURL(for: file))
-                } catch {
-                    let reason = String(describing: error)
-                    logger.error("Opening \(file.fileName, privacy: .public): \(reason, privacy: .public)")
-                    failed.insert(file.role)
-                }
-            }
-            if !failed.isEmpty { opening.unopenable[id] = failed }
-            guard let basemap = opened[.basemap] else { continue }
-            opening.countries.append(OfflineCountryArchives.Country(
-                id: id,
-                bounds: record.country.bounds,
-                basemap: basemap,
-                extras: opened[.extras],
-                record: record,
-                detail: opened[.detail],
-                detailExtras: opened[.detailExtras],
-                trails: opened[.trails],
-                elevation: opened[.elevation]
-            ))
-        }
-        return opening
     }
 
     /// Whether `entry` is a download the index has already installed: its

@@ -230,8 +230,8 @@ struct OfflineCountriesList: View {
             if isLast {
                 Text(
                     """
-                    The OpenHikes map draws a downloaded country with no signal, Community finds its \
-                    OpenStreetMap trails, and trails there get their elevation profile. Downloads use Wi-Fi.
+                    The OpenHikes map draws a downloaded country with no signal, and Community finds its \
+                    OpenStreetMap trails. Downloads use Wi-Fi.
                     """
                 )
             }
