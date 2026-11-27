@@ -130,6 +130,43 @@ struct OfflineCountriesElevationTests {
         }
     }
 
+    /// The hiker's own order: a country down without its heights, then the
+    /// switch, which brings that country's heights and nothing else of it.
+    @Test("a country downloaded without heights brings them, and only them, when Elevation Data is turned on")
+    func turnedOnAfterTheDownload() async throws {
+        let elevation = Self.elevation(Self.level(295))
+        let slovenia = OfflineCountryFixture.country(bytes: basemap, elevation: elevation)
+        try await OfflineCountryFixture.withDirectory { directory in
+            let harness = await OfflineCountryHarness.make(in: directory, offering: [slovenia])
+            harness.countries.setIncludesElevation(false)
+            harness.countries.download(slovenia)
+            try harness.land([.basemap: basemap])
+            await settleDelegateHop(until: "the country is down") {
+                harness.countries.isInstalled("SI") && harness.countries.downloads["SI"] == nil
+            }
+            let asked = harness.downloader.requests.count
+            let heights = try #require(slovenia.files.first { $0.role == .elevation })
+
+            harness.countries.setIncludesElevation(true)
+
+            #expect(harness.downloader.requests.dropFirst(asked).map(\.key.role) == [.elevation])
+            #expect(harness.countries.downloads["SI"]?.byteCount == heights.byteCount)
+            #expect(harness.countries.isDrawn("SI"), "the map is drawn while they come")
+            try harness.land([.elevation: elevation])
+            await settleDelegateHop(until: "the country has its heights") {
+                harness.countries.downloads["SI"] == nil
+                    && !harness.archives.elevationSquares([Self.square]).isEmpty
+            }
+            #expect(harness.countries.installed["SI"]?.hasElevation == true)
+            #expect(harness.store.installed().first?.hasElevation == true)
+            #expect(harness.fileExists(heights))
+            let database = StubTrailCellDatabase()
+            database.fail(with: URLError(.notConnectedToInternet))
+            let library = ElevationSquareLibrary(database: database, downloads: harness.archives, directory: nil)
+            #expect(try await library.heights(at: [Self.ljubljana]) == [295])
+        }
+    }
+
     @Test("turning Elevation Data off deletes the heights and keeps the area, and turning it on brings them back")
     func switchedOffAndOn() async throws {
         let elevation = Self.elevation(Self.level(295))
