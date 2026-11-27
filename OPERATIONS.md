@@ -164,11 +164,14 @@ indexed* in `AGENTS.md` gives.
 
 ### Tile server deployment state
 
-Checked 2026-11-24. The bucket holds every area of build `20261124`, cut from
+Checked 2026-11-27. The bucket holds every area of build `20261124`, cut from
 `planet-20261124` and `extras-20261124-16`, with its day hikes from
-`trails-20261124-16` 50 km round it: 381 of them (234 countries, and the 51
-states, 13 provinces and 83 regions of the three split ones), 1,905 files and
-181.0 GB, of which the day hikes are 279 MB, and no other country file.
+`trails-20261124-16` 50 km round it and its heights from
+`elevation-20261126-20` 5 km round it (added 2026-11-27): 381 of them (234
+countries, and the 51 states, 13 provinces and 83 regions of the three split
+ones), 2,286 files and 253.0 GB, of which the day hikes are 279 MB and the
+heights 72.0 GB, and no other country file. The Worker's country route did
+not serve the heights' files when they were listed; see #1690.
 Beside them it holds those two archives, the five sets of squares, and the
 manifest at revision 13, which names all seven, and nothing else. The squares
 are `routing-20261124-16`, `trails-20261124-16`, `routes-20261124-16` and
