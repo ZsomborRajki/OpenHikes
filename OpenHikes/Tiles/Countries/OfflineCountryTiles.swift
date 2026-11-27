@@ -16,7 +16,8 @@
 //  the language changes (``VectorTileArchives/language``).
 //
 //  An area's day hikes are here too, for the Community tab's search to read
-//  before it asks the tile server (``trailCells(named:)``).
+//  before it asks the tile server (``trailCells(named:)``), and its heights,
+//  for a line with none (``elevationSquares(_:)``).
 //
 //  The cache files a drawn tile under the provider's key, which says nothing
 //  of the build it was drawn from, so a tile drawn before a country's build
@@ -50,6 +51,8 @@ nonisolated final class OfflineCountryArchives: Sendable {
         var detailExtras: PMTilesArchive?
         /// The day hikes' squares round it, where its download brought them.
         var trails: PMTilesArchive?
+        /// The heights' squares of it, where its download brought them.
+        var elevation: PMTilesArchive?
     }
 
     /// What a country holds for a tile: the archive tile it is drawn from,
@@ -145,23 +148,52 @@ nonisolated final class OfflineCountryArchives: Sendable {
     /// newer one has it; the squares the device keeps from the tile server
     /// mix builds the same way (``TrailCellStore``).
     func trailCells(named names: [String]) -> [String: Data] {
+        squares(named: names, of: .trails, in: \.trails)
+    }
+
+    /// The heights' squares of `squares` that a downloaded area covers, each
+    /// its ``ElevationSquareFile``'s bytes: a square at sea level too, which
+    /// its file holds as posts at 0 m where the tile server has no tile. A
+    /// square missing from the answer is one no area here covers, or whose
+    /// file could not be read. Of two areas that cover a square, the newer
+    /// build's answers, as for the day hikes.
+    func elevationSquares(_ squares: [ElevationSquare]) -> [ElevationSquare: Data] {
+        let names = squares.map(ElevationSquareGrid.recordName(for:))
+        let found = self.squares(named: names, of: .elevation, in: \.elevation)
+        guard !found.isEmpty else { return [:] }
+        return Dictionary(
+            zip(squares, names).compactMap { square, name in found[name].map { (square, $0) } },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    /// The tiles of `set`'s squares named `names`, read out of each area's
+    /// file of them (`file`), the newer build's first.
+    private func squares(
+        named names: [String],
+        of set: SquareArchive,
+        in file: KeyPath<Country, PMTilesArchive?>
+    ) -> [String: Data] {
         let held = countries.withLock { $0 }
-            .filter { $0.trails != nil }
+            .filter { $0[keyPath: file] != nil }
             .sorted { ($0.record?.country.build ?? "") > ($1.record?.country.build ?? "") }
         guard !held.isEmpty else { return [:] }
         var found: [String: Data] = [:]
         for name in names {
-            guard let tile = SquareArchive.trails.tile(named: name) else { continue }
+            guard let tile = set.tile(named: name) else { continue }
             for country in held {
-                guard let trails = country.trails else { continue }
+                guard let archive = country[keyPath: file] else { continue }
                 do {
-                    guard let bytes = try trails.tile(z: tile.zoom, x: tile.x, y: tile.y) else { continue }
+                    guard let bytes = try archive.tile(z: tile.zoom, x: tile.x, y: tile.y) else { continue }
                     found[name] = bytes
                     break
                 } catch {
                     let reason = String(describing: error)
                     Self.logger.error(
-                        "Country \(country.id, privacy: .public)'s trails unreadable: \(reason, privacy: .public)"
+                        """
+                        Country \(country.id, privacy: .public)'s \(set.rawValue, privacy: .public) \
+                        unreadable: \(reason, privacy: .public)
+                        """
                     )
                 }
             }

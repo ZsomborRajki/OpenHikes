@@ -23,8 +23,8 @@
 //  deletes it from them and keeps the areas (``reconcile()``). A file the
 //  list names for a build already down that the area did not take is
 //  brought the same way, and ahead of any zoom 15 the area lacks: the day
-//  hikes' squares, which builds already listed gained after many areas were
-//  down.
+//  hikes' squares and the heights' squares, which builds already listed
+//  gained after many areas were down.
 //
 //  A download is `.speculative`, as a bulk tile download is: it waits for
 //  Wi-Fi, and it is refused outright in Low Power Mode or while the device is
@@ -200,7 +200,8 @@ final class OfflineCountries {
                 reopenArchives()
                 store.remove(record.files.filter(\.role.isDetail), keeping: Array(installed.values))
             } else if let current, !needsRepair(record.country.id), !filesToFetch(for: current).isEmpty {
-                // A file its build gained since it came down: its day hikes.
+                // A file its build gained since it came down: its day hikes,
+                // or its heights.
                 download(current)
             }
         }
@@ -673,7 +674,8 @@ extension OfflineCountries {
                 record: record,
                 detail: opened[.detail],
                 detailExtras: opened[.detailExtras],
-                trails: opened[.trails]
+                trails: opened[.trails],
+                elevation: opened[.elevation]
             ))
         }
         return opening

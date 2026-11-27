@@ -99,12 +99,12 @@ final class Extractor: Sendable {
 
     /// Writes `tiles` to `url` as an archive of their own, with `template`'s
     /// zooms, bounds and center and the source's tile type and compression.
-    /// Each tile of `filled` the source does not have is written as `fill`,
-    /// once, after the source's: bytes already in the source's compression.
+    /// Each tile of `filled` the source does not have is written as the
+    /// bytes it is given there, already in the source's compression: each
+    /// distinct one once, after the source's.
     func write(
         _ tiles: [LocatedTile],
-        filling filled: [UInt64] = [],
-        with fill: [UInt8] = [],
+        filling filled: [UInt64: [UInt8]] = [:],
         to url: URL,
         header template: PMTilesHeader,
         metadata: [UInt8]
@@ -120,12 +120,20 @@ final class Extractor: Sendable {
             total += lengths[offset] ?? 0
         }
         let copied = total
-        let filling = Set(filled).subtracting(tiles.map(\.id))
+        let had = Set(tiles.map(\.id))
+        let filling = filled.filter { !had.contains($0.key) }.sorted { $0.key < $1.key }
+        // Each distinct fill once, in the order its first tile comes.
+        var fills: [[UInt8]] = []
+        var fillOffsets: [[UInt8]: UInt64] = [:]
+        for (_, fill) in filling where fillOffsets[fill] == nil {
+            fillOffsets[fill] = total
+            fills.append(fill)
+            total += UInt64(fill.count)
+        }
         var placed = tiles.map { (id: $0.id, offset: moved[$0.offset] ?? 0, length: $0.length) }
         if !filling.isEmpty {
-            placed += filling.map { (id: $0, offset: copied, length: UInt64(fill.count)) }
+            placed += filling.map { (id: $0.key, offset: fillOffsets[$0.value] ?? copied, length: UInt64($0.value.count)) }
             placed.sort { $0.id < $1.id }
-            total += UInt64(fill.count)
         }
         var entries: [PMTilesEntry] = []
         for tile in placed {
@@ -141,7 +149,7 @@ final class Extractor: Sendable {
         header.tileType = self.header.tileType
         header.addressedTiles = UInt64(placed.count)
         header.tileEntries = UInt64(entries.count)
-        header.tileContents = UInt64(offsets.count + (filling.isEmpty ? 0 : 1))
+        header.tileContents = UInt64(offsets.count + fills.count)
         header.isClustered = Self.isClustered(entries)
         let prefix = PMTilesLayout.prefix(header: header, entries: entries, metadata: metadata, tileDataLength: total)
 
@@ -182,7 +190,7 @@ final class Extractor: Sendable {
             }
         }
         guard written == copied else { throw SourceError.shortRead(expected: copied, got: Int(written)) }
-        if !filling.isEmpty { try output.write(contentsOf: Data(fill)) }
+        for fill in fills { try output.write(contentsOf: Data(fill)) }
         return Written(
             addressed: placed.count,
             entries: entries.count,

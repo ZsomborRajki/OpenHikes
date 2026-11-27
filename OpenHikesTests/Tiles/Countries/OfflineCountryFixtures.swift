@@ -44,6 +44,7 @@ nonisolated enum OfflineCountryFixture {
         detail: Data? = nil,
         detailExtras: Data? = nil,
         trails: Data? = nil,
+        elevation: Data? = nil,
         group: String? = nil,
         names: [String: String] = [:],
         schema: Int = OfflineCountryManifest.readableSchema
@@ -54,6 +55,7 @@ nonisolated enum OfflineCountryFixture {
             (.detail, "detail-", detail),
             (.detailExtras, "detail-extras-", detailExtras),
             (.trails, "trails-", trails),
+            (.elevation, "elevation-", elevation),
         ] {
             if let data { files.append(file(role, name: "\(id)-\(infix)\(build).pmtiles", bytes: data)) }
         }
@@ -117,9 +119,18 @@ nonisolated enum OfflineCountryFixture {
             path: "countries/\(name)",
             byteCount: Int64(bytes.count),
             sha256: SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined(),
-            minimumZoom: role == .trails ? SquareArchive.trails.zoom : role.isDetail ? 15 : 0,
-            maximumZoom: role == .trails ? SquareArchive.trails.zoom : role.isDetail ? 15 : 14
+            minimumZoom: squares(of: role)?.zoom ?? (role.isDetail ? 15 : 0),
+            maximumZoom: squares(of: role)?.zoom ?? (role.isDetail ? 15 : 14)
         )
+    }
+
+    /// The set of squares a file of `role` holds, or `nil` for a map's.
+    private static func squares(of role: OfflineCountryManifest.Role) -> SquareArchive? {
+        switch role {
+        case .trails: .trails
+        case .elevation: .elevation
+        case .basemap, .extras, .detail, .detailExtras: nil
+        }
     }
 
     static func manifest(_ countries: [OfflineCountryManifest.Country]) -> OfflineCountryManifest {

@@ -145,6 +145,11 @@ archive of them stays listed until then (*The elevation squares* in
 2. `upload-archive <dir>`, then `Scripts/vector-archives.sh use <name>`
    (with `--generation 1` for the list's first archive), `publish`, and
    commit the manifest.
+3. The areas take the new heights with their next build, which
+   `Scripts/offline-countries.sh publish` cuts from the first `elevation`
+   archive the manifest names. A build already up that has none gains them
+   through `Scripts/offline-countries.sh elevation`, then `upload`; one that
+   has them keeps them, because an upload never replaces a file's bytes.
 
 ### The public database's copies of the squares
 

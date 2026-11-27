@@ -4,8 +4,10 @@
 //
 //  Heights for the points of a line that has none, read from the elevation
 //  squares on the OpenHikes tile server: which squares the points need, the
-//  ones this device already holds, one request for the rest, and the height
-//  at each point read off the four posts around it. See
+//  ones this device already holds — those a downloaded area brought
+//  (``DownloadedElevationSquares``), then those kept from earlier answers —
+//  one request for the rest, and the height at each point read off the four
+//  posts around it. See
 //  ``ElevationSquareGrid`` for the squares, and ``CuratedElevationSourcing``
 //  for the three callers — a curated route, a drawn trail and a library hike
 //  with no heights.
@@ -33,6 +35,15 @@
 //    withholds — is `nan`, and a line with one gets no profile at all
 //    (``CuratedElevationSourcing/samples(of:)``) rather than a grade drawn
 //    across ground nobody measured.
+//
+//  ## What a download brought answers first
+//
+//  A downloaded area's squares are the server's own, kept for as long as the
+//  download, so they answer ahead of a kept copy and of the server: a line on
+//  ground the hiker downloaded asks nothing of the network, and is given its
+//  heights with no signal. A line that reaches past the download asks for the
+//  rest, and with no signal has no answer, as any line whose squares would
+//  not come.
 //
 //  ## What arrived is kept
 //
@@ -88,24 +99,32 @@ nonisolated struct ElevationSquareLibrary: CuratedElevationSourcing {
             .elevation,
             requestTimeout: requestTimeout,
             resourceTimeout: resourceTimeout
-        )
+        ),
+        downloads: OfflineCountryArchives.shared
     )
 
     private let database: any TrailCellFetching
+    /// The squares the downloaded areas brought, read first. `nil` for a
+    /// launch with none to read, every suite's unless it passes some.
+    private let downloads: (any DownloadedElevationSquares)?
     /// `nil` for a launch with nowhere to keep squares, which costs a fetch
     /// per answer and breaks nothing.
     private let store: TrailCellStore?
 
+    /// - Parameter downloads: The squares downloaded areas hold, which the
+    ///   live library reads out of ``OfflineCountryArchives/shared``.
     /// - Parameter directory: Where fetched squares are kept between
     ///   launches. A suite passes one of its own, and must: the default is
     ///   the app's `Caches`. See *Deliberate test seams* in the repository
     ///   instructions.
     init(
         database: any TrailCellFetching,
+        downloads: (any DownloadedElevationSquares)? = nil,
         directory: URL? = Self.defaultDirectory(),
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.database = database
+        self.downloads = downloads
         store = directory.map { TrailCellStore(directory: $0, maximumFiles: Self.maximumFiles, clock: clock) }
     }
 
@@ -143,13 +162,10 @@ nonisolated struct ElevationSquareLibrary: CuratedElevationSourcing {
 // MARK: - Reading the squares
 
 nonisolated extension ElevationSquareLibrary {
-    /// Every square of `squares`, kept or fetched: a file, or `nil` for sea.
-    /// Throws when any of them cannot be had.
+    /// Every square of `squares`, downloaded, kept or fetched: a file, or
+    /// `nil` for sea. Throws when any of them cannot be had.
     private func files(of squares: [ElevationSquare]) async throws -> [ElevationSquare: ElevationSquareFile?] {
-        var read: [ElevationSquare: ElevationSquareFile?] = [:]
-        for square in squares {
-            if let kept = kept(square) { read[square] = .some(kept) }
-        }
+        var read = held(squares)
         let missing = squares.filter { read[$0] == nil }
         guard !missing.isEmpty else { return read }
 
@@ -193,6 +209,25 @@ nonisolated extension ElevationSquareLibrary {
             }
         }
         store?.save(fresh)
+        return read
+    }
+
+    /// The squares of `squares` this device holds: those a download brought,
+    /// then those kept from earlier answers. A square missing from the
+    /// answer is one to fetch.
+    private func held(_ squares: [ElevationSquare]) -> [ElevationSquare: ElevationSquareFile?] {
+        var read: [ElevationSquare: ElevationSquareFile?] = [:]
+        for (square, bytes) in downloads?.elevationSquares(squares) ?? [:] {
+            // One that does not read is fetched instead, as a kept one is.
+            guard let file = Self.file(decoding: bytes, as: square) else {
+                Self.logger.error("A downloaded elevation square is not one this build reads.")
+                continue
+            }
+            read[square] = .some(file)
+        }
+        for square in squares where read[square] == nil {
+            if let kept = kept(square) { read[square] = .some(kept) }
+        }
         return read
     }
 

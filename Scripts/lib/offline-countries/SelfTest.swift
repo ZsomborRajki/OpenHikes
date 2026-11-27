@@ -81,7 +81,11 @@ extension Tool {
         guard archive.header.isClustered else { fail("the cut is not clustered") }
         try checkAreas()
         let squares = try await checkTrails(in: directory)
-        print("offline-countries: selftest passed (\(wanted.count) tiles cut, \(tiles.count) in the world, \(squares) squares)")
+        let heights = try await checkElevationCut(in: directory)
+        print("""
+        offline-countries: selftest passed (\(wanted.count) tiles cut, \(tiles.count) in the world, \
+        \(squares) squares, \(heights) squares of heights)
+        """)
     }
 
     /// The day hikes: a made-up trails archive with routes in three squares
@@ -168,6 +172,93 @@ extension Tool {
             fail("the margin does not go round the pole")
         }
         return covered.count
+    }
+
+    /// The heights: a made-up elevation archive with two squares of land
+    /// round Ljubljana, cut along a square of Slovenia with a margin, and
+    /// along a square across 60°N with no land at all. Every square within
+    /// each reads back at its row's size, the two as they were and the rest
+    /// at sea level, which across 60°N is two sizes of square; and a square
+    /// past the margin is not there.
+    static func checkElevationCut(in directory: URL) async throws -> Int {
+        func square(_ latitude: Double, _ longitude: Double) -> ElevationSquare {
+            ElevationSquares.square(of: ElevationSquares.cover.square(containingLatitude: latitude, longitude: longitude))
+        }
+        func land(_ square: ElevationSquare, base: Int16) -> ElevationSquareFile {
+            let rows = ElevationSquareGrid.rowsPerSquare
+            let columns = ElevationSquareGrid.columnsPerSquare(row: square.row)
+            let heights = (0..<rows * columns).map { base + Int16($0 % columns / 10) - Int16($0 / columns / 10) }
+            return ElevationSquareFile(rows: rows, columns: columns, heights: heights)
+        }
+        let ljubljana = square(46.05, 14.5)
+        let kamnik = square(46.22, 14.6)
+        let landed = [ljubljana: land(ljubljana, base: 300), kamnik: land(kamnik, base: 900)]
+        var tiles: [(id: UInt64, bytes: [UInt8])] = []
+        for (square, file) in landed {
+            guard let tile = SquareArchive.elevation.tile(named: ElevationSquareGrid.recordName(for: square)) else {
+                fail("square \(square) is no tile")
+            }
+            tiles.append((PMTilesTileID.id(z: tile.zoom, x: tile.x, y: tile.y), Array(file.encoded())))
+        }
+        tiles.sort { $0.id < $1.id }
+        var data: [UInt8] = []
+        var entries: [PMTilesEntry] = []
+        for tile in tiles {
+            entries.append(PMTilesEntry(tileID: tile.id, offset: UInt64(data.count), length: UInt64(tile.bytes.count), runLength: 1))
+            data += tile.bytes
+        }
+        var header = PMTilesHeader()
+        header.minimumZoom = UInt8(SquareArchive.elevation.zoom)
+        header.maximumZoom = UInt8(SquareArchive.elevation.zoom)
+        let world = directory.appending(path: "elevation-20261126-20.pmtiles")
+        let prefix = PMTilesLayout.prefix(header: header, entries: entries, metadata: Array("{}".utf8),
+                                          tileDataLength: UInt64(data.count))
+        try Data(prefix + data).write(to: world)
+
+        let margin = 5.0
+        let source = ElevationSource(
+            extractor: try await Extractor(source: FileSource(url: world)),
+            name: "elevation-20261126-20",
+            marginKilometers: margin,
+            metadata: Array("{}".utf8)
+        )
+        let slovenia: Ring = [(14.3, 45.9), (14.8, 45.9), (14.8, 46.3), (14.3, 46.3), (14.3, 45.9)]
+        let sixty: Ring = [(5.0, 59.9), (5.2, 59.9), (5.2, 60.1), (5.0, 60.1), (5.0, 59.9)]
+        var count = 0
+        for (id, ring) in [("SI", slovenia), ("NO", sixty)] {
+            let file = try await cutElevation(id: id, rings: [ring], build: "20261124", from: source, into: directory, server: nil)
+            guard file.role == .elevation, file.path == "countries/\(id)-elevation-20261124.pmtiles", file.hasSafeName,
+                  file.minimumZoom == SquareArchive.elevation.zoom
+            else { fail("the heights are listed as \(file)") }
+            let archive = try PMTilesArchive(contentsOf: directory.appending(path: file.fileName))
+            let covered = ElevationSquares.squares(rings: [ring], marginKilometers: margin)
+            guard covered.count == Int(archive.header.addressedTiles) else { fail("the heights of \(id) address other squares") }
+            var sizes: Set<Int> = []
+            for square in covered {
+                guard let tile = SquareArchive.elevation.tile(named: ElevationSquareGrid.recordName(for: square)),
+                      let bytes = try archive.tile(z: tile.zoom, x: tile.x, y: tile.y),
+                      let read = try? ElevationSquareFile(decoding: bytes)
+                else { fail("the heights of \(id) have no square \(square)") }
+                let expected = landed[square] ?? ElevationSquares.seaLevel(row: square.row)
+                guard read == expected else { fail("the heights of \(id) read wrong at \(square)") }
+                sizes.insert(read.columns)
+            }
+            // 14.3°E less the margin, and a square further, is past it.
+            let beyond = square(46.0, 14.3 - margin / (110 * cos(46 * Double.pi / 180)) - 0.13)
+            if id == "SI", let tile = SquareArchive.elevation.tile(named: ElevationSquareGrid.recordName(for: beyond)),
+               try archive.tile(z: tile.zoom, x: tile.x, y: tile.y) != nil {
+                fail("the heights hold \(beyond), outside the margin")
+            }
+            if id == "SI", !covered.contains(ljubljana) || !covered.contains(kamnik) {
+                fail("the heights of Slovenia leave out its land")
+            }
+            if id == "NO", sizes != [ElevationSquareGrid.columnsPerSquare(row: square(59.95, 5.1).row),
+                                     ElevationSquareGrid.columnsPerSquare(row: square(60.05, 5.1).row)] {
+                fail("the sea across 60°N is squares of \(sizes.sorted()) posts a row")
+            }
+            count += covered.count
+        }
+        return count
     }
 
     /// What is cut: a split country as its regions, a region filed under it

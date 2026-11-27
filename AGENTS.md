@@ -980,6 +980,15 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
     build (`Scripts/offline-countries.sh trails`, then `upload`), and an area
     already down brings it at the next read of the list
     (`OfflineCountries.reconcile()`), never as an update.
+- **An area carries its heights** (`OfflineCountryManifest.Role.elevation`),
+  a sixth file every download takes, on the day hikes' terms: the elevation
+  archive's squares within a few kilometres of the outline
+  (`Scripts/lib/offline-countries/Elevation.swift`), so a line there is given
+  its heights with no signal. A square of sea is a tile of it, every post at
+  0 m at its row's size, so a square it lacks is one it says nothing about
+  (`DownloadedElevationSquares`, `ElevationSquareLibrary`). A build already
+  up gains it through `Scripts/offline-countries.sh elevation`, then
+  `upload`.
 - **Cut on the server, read in place.** `Scripts/offline-countries.sh` cuts
   each area out of the archives the map draws; its header is the procedure.
   A build is named for the later of its archives' days. Its files go under
@@ -1621,6 +1630,8 @@ Nothing asks Stadia for heights, and nothing falls back to it.
   filed as posts with no height, and a point there gets none. The 90 m model
   is never used to fill it: its tiles there are under ESA's restricted
   licence (`Scripts/lib/trail-cells/ElevationBuild.swift`).
+- **A downloaded area's squares are read first** (*The offline countries*),
+  then those kept in `Caches`, then the server's.
 - **The credit is the licensor's words** (`ElevationCredit`): in *About*, in
   the archive's metadata, and in the terms in every language with the
   liability sentence the licence asks for. It is never translated.
