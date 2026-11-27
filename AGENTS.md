@@ -980,15 +980,23 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
     build (`Scripts/offline-countries.sh trails`, then `upload`), and an area
     already down brings it at the next read of the list
     (`OfflineCountries.reconcile()`), never as an update.
-- **An area carries its heights** (`OfflineCountryManifest.Role.elevation`),
-  a sixth file every download takes, on the day hikes' terms: the elevation
-  archive's squares within a few kilometres of the outline
-  (`Scripts/lib/offline-countries/Elevation.swift`), so a line there is given
-  its heights with no signal. A square of sea is a tile of it, every post at
-  0 m at its row's size, so a square it lacks is one it says nothing about
-  (`DownloadedElevationSquares`, `ElevationSquareLibrary`). A build already
-  up gains it through `Scripts/offline-countries.sh elevation`, then
-  `upload`.
+- **An area carries its heights while *Elevation Data* is on**
+  (`OfflineCountryManifest.Role.elevation`,
+  `SettingsKey.offlineCountriesElevation`, on by default), a sixth file on
+  the day hikes' terms: the elevation archive's squares within a few
+  kilometres of the outline (`Scripts/lib/offline-countries/Elevation.swift`),
+  so a line there is given its heights with no signal.
+  - The switch is the hiker's, by the owner's decision, because over ice or
+    a vast area the heights outweigh the map many times. It works as *Extra
+    Detail* does: on brings the heights to every area down, off deletes
+    them and keeps the areas (`OfflineCountries.reconcile()`). Each record
+    says whether it has them (`OfflineCountryStore.Record.hasElevation`),
+    and so does its row.
+  - A square of sea is a tile of it, every post at 0 m at its row's size,
+    so a square it lacks is one it says nothing about
+    (`DownloadedElevationSquares`, `ElevationSquareLibrary`). A build
+    already up gains it through `Scripts/offline-countries.sh elevation`,
+    then `upload`.
 - **Cut on the server, read in place.** `Scripts/offline-countries.sh` cuts
   each area out of the archives the map draws; its header is the procedure.
   A build is named for the later of its archives' days. Its files go under

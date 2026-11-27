@@ -83,7 +83,7 @@ struct OfflineCountryDirectoryTests {
                 if downloaded.contains(country.id) { return .downloaded }
                 return unfinished.contains(country.id) ? .unfinished : nil
             },
-            byteCount: { $0.byteCount(withDetail: true) }
+            byteCount: { $0.byteCount(withDetail: true, withElevation: true) }
         )
     }
 

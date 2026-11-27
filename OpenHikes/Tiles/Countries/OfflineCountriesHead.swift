@@ -3,8 +3,8 @@
 //  OpenHikes
 //
 //  The head of *Offline Maps*' list, over every area: which map the
-//  downloads are for, the way back to it where another is selected, and
-//  *Extra Detail*.
+//  downloads are for, the way back to it where another is selected, *Extra
+//  Detail*, and *Elevation Data* under it.
 //
 //  Only the OpenHikes map is cut by country, and nothing else on the screen
 //  says so: the outlines are drawn over whichever map is up, and a hiker on
@@ -13,7 +13,10 @@
 //
 //  *Extra Detail* is here rather than at the foot, where it was under some
 //  two hundred and forty countries. It changes what every download below it
-//  costs.
+//  costs, and so does *Elevation Data*, which is a section of its own so
+//  that each switch has its own footer: the heights cost a tenth of a map in
+//  the mountains and many times one over ice, so a hiker short of space is
+//  told which to turn off. Each downloaded row says whether it has them.
 //
 
 import SwiftUI
@@ -42,6 +45,20 @@ struct OfflineCountriesHead: View {
                 """
                 Adds buildings and small places such as water taps, toilets and benches. \
                 Downloads take about twice the space.
+                """
+            )
+        }
+        Section {
+            Toggle("Elevation Data", isOn: Binding(
+                get: { countries.includesElevation },
+                set: { countries.setIncludesElevation($0) }
+            ))
+            .accessibilityIdentifier("offline-maps-elevation-data")
+        } footer: {
+            Text(
+                """
+                Gives trails in a downloaded country their elevation profile with no signal. \
+                Large or icy countries take much more space.
                 """
             )
         }

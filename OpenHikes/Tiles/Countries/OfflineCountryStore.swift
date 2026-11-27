@@ -38,14 +38,17 @@ nonisolated struct OfflineCountryStore: Sendable {
 
     /// A downloaded area: the manifest's entry it was downloaded from,
     /// outline and all, so it is listed and drawn with no network, and
-    /// whether its zoom 15 came down with it.
+    /// whether its zoom 15 and its heights came down with it.
     struct Record: Codable, Equatable, Sendable {
         var country: OfflineCountryManifest.Country
         var installedAt: Date
         var hasDetail = false
+        var hasElevation = false
 
         /// The files on the device.
-        var files: [OfflineCountryManifest.File] { country.files(withDetail: hasDetail) }
+        var files: [OfflineCountryManifest.File] {
+            country.files(withDetail: hasDetail, withElevation: hasElevation)
+        }
         var byteCount: Int64 { files.reduce(0) { $0 + $1.byteCount } }
     }
 
@@ -270,5 +273,22 @@ nonisolated enum OfflineCountryDigest {
             }
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+nonisolated extension OfflineCountryStore.Record {
+    /// Reads an area as any build wrote it. A build before *Elevation Data*
+    /// wrote nothing of the heights, and took them where the entry the area
+    /// came down from lists them: none of its entries does, because every
+    /// such build left a file of a role it did not know off the list it
+    /// chose a download from. So an installed build's index reads on, each
+    /// area as it is on the device.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        country = try container.decode(OfflineCountryManifest.Country.self, forKey: .country)
+        installedAt = try container.decode(Date.self, forKey: .installedAt)
+        hasDetail = try container.decode(Bool.self, forKey: .hasDetail)
+        hasElevation = try container.decodeIfPresent(Bool.self, forKey: .hasElevation)
+            ?? country.files.contains(where: \.role.isElevation)
     }
 }
