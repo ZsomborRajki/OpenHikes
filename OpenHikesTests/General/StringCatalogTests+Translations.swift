@@ -3,11 +3,11 @@
 //  OpenHikesTests
 //
 //  The translations, German, French, Spanish, Italian, Russian, Polish,
-//  Ukrainian, Romanian and Dutch, read out of the source tree like the rest of
-//  this suite. A key with no translation falls back to English without a word, and
-//  a translated value that drops or retypes a placeholder formats the wrong
-//  argument. Neither shows anywhere else, because the hosted tests run in
-//  English.
+//  Ukrainian, Romanian, Dutch and Croatian, read out of the source tree like
+//  the rest of this suite. A key with no translation falls back to English
+//  without a word, and a translated value that drops or retypes a placeholder
+//  formats the wrong argument. Neither shows anywhere else, because the
+//  hosted tests run in English.
 //
 //  The Info.plist and App Shortcuts catalogs have no sync to keep them
 //  current: the IDE extracts into them, `xcodebuild` does not, and
@@ -24,22 +24,23 @@ import Testing
 
 extension StringCatalogTests {
     /// The languages the app ships besides English, its development language.
-    nonisolated static let translations = ["de", "fr", "es", "it", "ru", "pl", "uk", "ro", "nl"]
+    nonisolated static let translations = ["de", "fr", "es", "it", "ru", "pl", "uk", "ro", "nl", "hr"]
 
     /// The languages whose `one` form is handed more than 1. French reads
-    /// zero as singular. Russian and Ukrainian read every number that ends in
-    /// 1 as singular, 11 aside: 21, 31, 101.
-    nonisolated static let countedSingulars = ["fr", "ru", "uk"]
+    /// zero as singular. Russian, Ukrainian and Croatian read every number
+    /// that ends in 1 as singular, 11 aside: 21, 31, 101.
+    nonisolated static let countedSingulars = ["fr", "ru", "uk", "hr"]
 
     /// The languages that count in three forms, where English has two, with
     /// the plural forms each one's catalog entry needs. Russian, Polish and
-    /// Ukrainian name their third form `many`; Romanian names its own `few`
-    /// and has none called `many`.
+    /// Ukrainian name their third form `many`; Romanian and Croatian name
+    /// their own `few` and have none called `many`.
     nonisolated static let threeFormPlurals: [String: Set<String>] = [
         "ru": ["one", "few", "many", "other"],
         "pl": ["one", "few", "many", "other"],
         "uk": ["one", "few", "many", "other"],
         "ro": ["one", "few", "other"],
+        "hr": ["one", "few", "other"],
     ]
 
     @Test("every catalogued string is translated", arguments: Self.catalogFolders, Self.translations)
@@ -89,8 +90,8 @@ extension StringCatalogTests {
     /// French reads zero as singular, so its `one` form is handed 0 as well
     /// as 1, and a singular that spells out the count as a word, as English
     /// "One photo goes on %2$@" does, would tell a hiker with no photos that
-    /// one goes. Russian and Ukrainian would tell a hiker with 21 that one
-    /// does. Their singular keeps the number.
+    /// one goes. Russian, Ukrainian and Croatian would tell a hiker with 21
+    /// that one does. Their singular keeps the number.
     @Test(
         "a singular keeps its count where it is handed more than 1",
         arguments: Self.catalogFolders, Self.countedSingulars
@@ -117,7 +118,8 @@ extension StringCatalogTests {
     /// 2 походи, 5 походів. A plural with no `few` or no `many` falls back to
     /// `other` without a word, and reads «5 похода», „5 wędrówki” or
     /// «5 походу». Romanian counts 1 drumeție, 2 drumeții, 20 de drumeții,
-    /// and one with no `few` would read „2 de drumeții”.
+    /// and one with no `few` would read „2 de drumeții”. Croatian counts
+    /// 1 tura, 2 ture, 5 tura, and one with no `few` would read “2 tura”.
     @Test(
         "a plural has every form where the language counts in three",
         arguments: Self.catalogFolders, Self.threeFormPlurals.keys.sorted()

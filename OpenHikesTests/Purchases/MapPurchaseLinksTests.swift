@@ -97,6 +97,14 @@ struct MapPurchaseLinksTests {
         #expect(language.termsAndConditions.absoluteString == "https://zsomborrajki.github.io/OpenHikes/nl/terms/")
     }
 
+    @Test("a Croatian app opens the Croatian pages", arguments: ["hr", "hr-HR", "hr-BA", "hr_HR"])
+    func croatianOpensCroatianPages(localization: String) {
+        let language = PageLanguage(localization: localization)
+        #expect(language == .croatian)
+        #expect(language.privacyPolicy.absoluteString == "https://zsomborrajki.github.io/OpenHikes/hr/privacy/")
+        #expect(language.termsAndConditions.absoluteString == "https://zsomborrajki.github.io/OpenHikes/hr/terms/")
+    }
+
     /// The development language, a language the site has no pages in, the
     /// `Base` localization and a missing answer: each reads the site's root.
     @Test("anything else opens the English pages", arguments: ["en", "en-GB", "sv", "Base", nil] as [String?])
@@ -116,7 +124,7 @@ struct MapPurchaseLinksTests {
     func everyShippedLanguageHasPages() throws {
         let shipped = Bundle.main.localizations.filter { $0 != "Base" }
         try #require(
-            ["de", "fr", "es", "it", "ru", "pl", "uk", "ro", "nl"].allSatisfy(shipped.contains),
+            ["de", "fr", "es", "it", "ru", "pl", "uk", "ro", "nl", "hr"].allSatisfy(shipped.contains),
             "the bundle lists \(shipped), without every language these pages translate"
         )
         for localization in shipped {

@@ -1527,11 +1527,12 @@ legal_gate="$repository_root/Scripts/check-legal-pages.sh"
 legal_work="$work/legal-pages"
 
 # A checkout whose English, German, French, Spanish, Italian, Russian, Polish,
-# Ukrainian, Romanian and Dutch pages agree, at `$1`.
+# Ukrainian, Romanian, Dutch and Croatian pages agree, at `$1`.
 write_legal_site() {
     local root="$1" page language date
     mkdir -p "$root/OpenHikes/Purchases"
     cat > "$root/OpenHikes/Purchases/MapPurchaseLinks.swift" <<'FIXTURE'
+case .croatian: URL(string: "https://zsomborrajki.github.io/OpenHikes/hr/privacy/")!
 case .dutch: URL(string: "https://zsomborrajki.github.io/OpenHikes/nl/privacy/")!
 case .english: URL(string: "https://zsomborrajki.github.io/OpenHikes/privacy/")!
 case .french: URL(string: "https://zsomborrajki.github.io/OpenHikes/fr/privacy/")!
@@ -1542,6 +1543,7 @@ case .romanian: URL(string: "https://zsomborrajki.github.io/OpenHikes/ro/privacy
 case .russian: URL(string: "https://zsomborrajki.github.io/OpenHikes/ru/privacy/")!
 case .spanish: URL(string: "https://zsomborrajki.github.io/OpenHikes/es/privacy/")!
 case .ukrainian: URL(string: "https://zsomborrajki.github.io/OpenHikes/uk/privacy/")!
+case .croatian: URL(string: "https://zsomborrajki.github.io/OpenHikes/hr/terms/")!
 case .dutch: URL(string: "https://zsomborrajki.github.io/OpenHikes/nl/terms/")!
 case .english: URL(string: "https://zsomborrajki.github.io/OpenHikes/terms/")!
 case .french: URL(string: "https://zsomborrajki.github.io/OpenHikes/fr/terms/")!
@@ -1555,7 +1557,7 @@ case .ukrainian: URL(string: "https://zsomborrajki.github.io/OpenHikes/uk/terms/
 static let termsOfUse = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
 FIXTURE
     for page in privacy terms de/privacy de/terms fr/privacy fr/terms es/privacy es/terms it/privacy it/terms \
-        ru/privacy ru/terms pl/privacy pl/terms uk/privacy uk/terms ro/privacy ro/terms nl/privacy nl/terms; do
+        ru/privacy ru/terms pl/privacy pl/terms uk/privacy uk/terms ro/privacy ro/terms nl/privacy nl/terms hr/privacy hr/terms; do
         language=en
         [[ "$page" == de/* ]] && language=de
         [[ "$page" == fr/* ]] && language=fr
@@ -1566,6 +1568,7 @@ FIXTURE
         [[ "$page" == uk/* ]] && language=uk
         [[ "$page" == ro/* ]] && language=ro
         [[ "$page" == nl/* ]] && language=nl
+        [[ "$page" == hr/* ]] && language=hr
         date=2026-10-12
         [[ "$page" == *privacy ]] && date=2026-10-29
         mkdir -p "$root/docs/$page"
@@ -1587,6 +1590,7 @@ if expect_status 0 \
     && expect_contains "$output" "ok    docs/uk/privacy/index.html (uk, 2026-10-29)" "the output" \
     && expect_contains "$output" "ok    docs/ro/terms/index.html (ro, 2026-10-12)" "the output" \
     && expect_contains "$output" "ok    docs/nl/privacy/index.html (nl, 2026-10-29)" "the output" \
+    && expect_contains "$output" "ok    docs/hr/terms/index.html (hr, 2026-10-12)" "the output" \
     && expect_contains "$output" "ok    docs/terms/index.html (en, 2026-10-12)" "the output" \
     && expect_absent "$output" "apple.com" "the output"; then
     pass
@@ -1608,6 +1612,7 @@ if expect_status 1 \
     && expect_contains "$output" "docs/uk/privacy/index.html takes effect 2026-10-29" "the error" \
     && expect_contains "$output" "docs/ro/privacy/index.html takes effect 2026-10-29" "the error" \
     && expect_contains "$output" "docs/nl/privacy/index.html takes effect 2026-10-29" "the error" \
+    && expect_contains "$output" "docs/hr/privacy/index.html takes effect 2026-10-29" "the error" \
     && expect_contains "$output" "docs/privacy/index.html took effect 2026-11-02" "the error"; then
     pass
 fi

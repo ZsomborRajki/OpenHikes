@@ -549,11 +549,11 @@ jobs:
           app="build/OpenHikes.xcarchive/Products/Applications/OpenHikes.app"
           status=0
           # Each of the four products carries its German, French, Spanish,
-          # Italian, Russian, Polish, Ukrainian, Romanian and Dutch too: a
-          # catalog compiles a `de.lproj`, `fr.lproj`, `es.lproj`, `it.lproj`,
-          # `ru.lproj`, `pl.lproj`, `uk.lproj`, `ro.lproj` or `nl.lproj` only
-          # while it holds that translation, and one missing here ships that
-          # product without it.
+          # Italian, Russian, Polish, Ukrainian, Romanian, Dutch and Croatian
+          # too: a catalog compiles a `de.lproj`, `fr.lproj`, `es.lproj`,
+          # `it.lproj`, `ru.lproj`, `pl.lproj`, `uk.lproj`, `ro.lproj`,
+          # `nl.lproj` or `hr.lproj` only while it holds that translation, and
+          # one missing here ships that product without it.
           for path in \
             "$app/OpenHikes" \
             "$app/PlugIns/OpenWidgetExtension.appex" \
@@ -594,6 +594,10 @@ jobs:
             "$app/PlugIns/OpenWidgetExtension.appex/nl.lproj" \
             "$app/Watch/OpenHikesWatch.app/nl.lproj" \
             "$app/Watch/OpenHikesWatch.app/PlugIns/OpenHikesWatchWidgets.appex/nl.lproj" \
+            "$app/hr.lproj" \
+            "$app/PlugIns/OpenWidgetExtension.appex/hr.lproj" \
+            "$app/Watch/OpenHikesWatch.app/hr.lproj" \
+            "$app/Watch/OpenHikesWatch.app/PlugIns/OpenHikesWatchWidgets.appex/hr.lproj" \
             "build/OpenHikes.xcarchive/dSYMs/OpenHikes.app.dSYM" \
             "build/OpenHikes.xcarchive/dSYMs/OpenWidgetExtension.appex.dSYM"
           do
