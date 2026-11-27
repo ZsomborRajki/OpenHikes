@@ -72,16 +72,16 @@ nonisolated final class MapModesUITests: XCTestCase {
     }
 
     /// OpenHikes Dark is the second card, beside the map it is the night's
-    /// half of, and is chosen like any other: its summary stands under the
-    /// row, and the map behind keeps OpenStreetMap's credit, whose data it
-    /// is drawn from too.
+    /// half of, and a subscriber chooses it like any other: its summary
+    /// stands under the row, and the map behind keeps OpenStreetMap's
+    /// credit, whose data it is drawn from too.
     ///
     /// A launch for UI tests reaches no tile server, and no raster tiles
     /// stand behind this map, so neither the card nor the map draws a tile.
     /// What is held here is the choice.
     @MainActor
     func testTheDarkMapIsTheSecondCardAndCanBeChosen() {
-        let app = launchApp()
+        let app = launchApp(arguments: ["--ui-test-entitled"])
         openMapModes(in: app)
         let light = element("provider-row-osm", in: app)
         let dark = element("provider-row-osm_dark", in: app)
@@ -113,6 +113,33 @@ nonisolated final class MapModesUITests: XCTestCase {
             element("provider-row-osm_dark", in: app).isSelected,
             "the choice should hold once the sheet has been closed and opened again"
         )
+    }
+
+    /// Without OpenHikes Pro the dark map's card opens the paywall, which
+    /// lists it. It needs no API key, so unlike
+    /// `testALockedMapOpensThePaywall` this holds in a build without
+    /// `OpenHikes/Secrets.plist` too.
+    @MainActor
+    func testTheDarkMapNeedsPro() {
+        let app = launchApp()
+        openMapModes(in: app)
+        let dark = element("provider-row-osm_dark", in: app)
+        XCTAssertTrue(dark.waitForExistence(timeout: UITestTimeout.navigation))
+        // A paid card is disabled while StoreKit has not answered.
+        XCTAssertTrue(waitUntil { dark.isEnabled }, "the dark card should be enabled once StoreKit has answered")
+        dark.tap()
+
+        XCTAssertTrue(
+            element("paywall-restore-button", in: app).waitForExistence(timeout: UITestTimeout.navigation),
+            "the dark map's card should open the paywall without Pro"
+        )
+        // The paywall's row, told apart from the card behind it by its value.
+        let row = app.descendants(matching: .any).matching(NSPredicate(
+            format: "label == %@ AND value BEGINSWITH %@",
+            "OpenHikes Dark",
+            "The OpenHikes map in dark colors"
+        )).firstMatch
+        XCTAssertTrue(row.exists, "the paywall should list the dark map among what Pro unlocks")
     }
 
     /// A sheet stays a sheet with the phone on its side, where one left to

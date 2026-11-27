@@ -238,6 +238,19 @@ struct VectorTileDarkPaletteTests {
         #expect((yellow >> 8) & 0xFF > yellow & 0xFF, "a secondary road is still yellow")
     }
 
+    /// A number has no halo and stands on its road's own surface, so it is
+    /// held to what a street's name is held to against the ground.
+    @Test("every road's number keeps 4.5:1 against its plate, on both maps")
+    func platesAreReadable() {
+        for palette in [VectorTilePalette.carto, dark] {
+            for road in VectorTileShields.Road.allCases {
+                let plate = palette.color(road.colors.fill, as: .surface)
+                let ink = palette.color(road.colors.ink, as: .text)
+                #expect(contrast(ink, plate) >= 4.5, "\(palette.name): \(road), \(contrast(ink, plate))")
+            }
+        }
+    }
+
     // MARK: On the picture
 
     private let tile = VectorTileAddress(z: 14, x: 8800, y: 5700)
@@ -276,5 +289,32 @@ struct VectorTileDarkPaletteTests {
         #expect(VectorTileFixture.image(night, has: "#0E0F11"), "and its casing")
         #expect(!VectorTileFixture.image(night, has: "#F2EFE9"))
         #expect(!VectorTileFixture.image(night, has: "#FFFFFF"))
+    }
+
+    /// Carto gives a cave entrance no fill, and its picture names no color,
+    /// so it is drawn black. The table says so, and the dark map sets it in
+    /// its icon color as it does every icon with a fill, rather than leave
+    /// the only mark of an unnamed cave black on its dark ground.
+    @Test("a cave entrance's icon is black on the light map and in the dark map's icon color on the dark one")
+    func caveEntranceTakesTheIconColor() throws {
+        let pointTile = VectorTileAddress(z: 17, x: 72_491, y: 45_826)
+        let middle = VectorTileFixture.grid / 2
+        let cave = VectorTileFixture.Feature(
+            type: .point,
+            properties: ["kind": .string("cave_entrance")],
+            geometry: VectorTileFixture.points([(middle, middle)])
+        )
+        let drawn = [layers[0], .init(name: "pois", features: [cave])]
+
+        let light = try #require(try VectorTileFixture.image(drawn, from: pointTile, drawing: pointTile))
+        let night = try #require(
+            try VectorTileFixture.image(drawn, from: pointTile, drawing: pointTile, palette: .dark)
+        )
+
+        #expect(VectorTileFixture.image(light, has: "#000000"))
+        let icon = dark.color(VectorTileStyle.color("#000000"), as: .icon)
+        let iconRGB = try #require(VectorTilePalette.components(of: icon)).rgb
+        #expect(VectorTileFixture.image(night, has: String(format: "#%06X", iconRGB)))
+        #expect(!VectorTileFixture.image(night, has: "#000000"))
     }
 }

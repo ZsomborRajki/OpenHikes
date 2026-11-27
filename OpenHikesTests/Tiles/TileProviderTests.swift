@@ -36,7 +36,7 @@ struct TileProviderTests {
         #expect(raster.attribution.credits == [.openStreetMap])
         #expect(TileCache.providerID(forDiskName: "osm_raster_14_1_2_2x") == raster.id)
         #expect(TileCache.providerID(forDiskName: "osm_14_1_2_2x") == TileProvider.openStreetMap.id)
-        #expect(TileProvider.all.firstIndex(of: raster) == 4, "after the free maps, before the paid ones")
+        #expect(TileProvider.all.firstIndex(of: raster) == 4, "after Apple's maps, before the commercial ones")
     }
 
     /// Every entry has to carry its attribution — it's displayed wherever the
@@ -89,15 +89,18 @@ struct TileProviderTests {
         }
     }
 
-    /// The commercial sources are the paid ones, and the three that cost
-    /// nothing to serve must never become paid. OpenStreetMap in particular: gating it
-    /// would put a paid feature on donated infrastructure, which its usage
-    /// policy exists to prevent.
-    @Test("only the commercial sources are gated")
+    /// The commercial sources are paid, and so is OpenHikes Dark, by the
+    /// owner's decision. The maps that cost nothing to serve must never
+    /// become paid. OpenStreetMap in particular: gating it would put a paid
+    /// feature on donated infrastructure, which its usage policy exists to
+    /// prevent.
+    @Test("only the commercial sources and the dark map are gated")
     func paidSources() {
         #expect(!TileProvider.openStreetMap.requiresPaidAccess)
+        #expect(!TileProvider.openStreetMapRaster.requiresPaidAccess)
         #expect(!TileProvider.appleMaps.requiresPaidAccess)
         #expect(!TileProvider.appleSatellite.requiresPaidAccess)
+        #expect(TileProvider.openHikesDark.requiresPaidAccess)
         #expect(TileProvider.stadiaOutdoors.requiresPaidAccess)
         #expect(TileProvider.stamenTerrain.requiresPaidAccess)
         #expect(TileProvider.thunderforestOutdoors.requiresPaidAccess)
@@ -250,19 +253,20 @@ struct TileProviderTests {
     /// it is the night's half of, and its id is a storage contract: the
     /// stored choice, its tiles' keys and their files all carry it. A build
     /// from before it existed reads the id as the default, the same map by
-    /// day.
-    @Test("OpenHikes Dark is the second choice, free and keyless, under a stable id")
+    /// day, and so does a device without OpenHikes Pro.
+    @Test("OpenHikes Dark is the second choice, behind Pro and keyless, under a stable id")
     func darkMapPlacement() {
         let dark = TileProvider.openHikesDark
         #expect(dark.id == "osm_dark")
         #expect(TileProvider.all.firstIndex(of: dark) == 1)
-        #expect(!dark.requiresPaidAccess && dark.apiKeyPlistKey == nil)
+        #expect(dark.requiresPaidAccess && dark.apiKeyPlistKey == nil)
         #expect(!dark.supportsBulkDownload && dark.durableQuota == nil)
         #expect(dark.attribution == TileProvider.openStreetMap.attribution)
         #expect(dark.maximumZ == TileProvider.openStreetMap.maximumZ)
         #expect(dark.vectorPalette == .dark)
         #expect(TileProvider.provider(id: "osm_dark") == dark)
-        #expect(TileProvider.renderable(id: "osm_dark", entitlement: .notEntitled) == dark)
+        #expect(TileProvider.renderable(id: "osm_dark", entitlement: .entitled) == dark)
+        #expect(TileProvider.renderable(id: "osm_dark", entitlement: .notEntitled) == .default)
         #expect(TileCache.providerID(forDiskName: "osm_dark_14_1_2") == dark.id)
         // Its template is never asked, and could reach nobody's server but
         // the app's own if it were.

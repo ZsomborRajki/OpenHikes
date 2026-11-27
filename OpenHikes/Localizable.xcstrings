@@ -53185,60 +53185,60 @@
         }
       }
     },
-    "Pro adds three outdoor map styles built for trails, and both Stadia styles save a whole route to your phone for a hike with no signal." : {
+    "Pro adds OpenHikes Dark and three outdoor map styles built for trails, and both Stadia styles save a whole route to your phone for a hike with no signal." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pro fügt drei Outdoor-Kartenstile hinzu, die für Wege gemacht sind, und beide Stadia-Stile speichern eine ganze Route auf deinem iPhone, für eine Wanderung ohne Empfang."
+            "value" : "Pro fügt OpenHikes Dunkel und drei Outdoor-Kartenstile hinzu, die für Wege gemacht sind, und beide Stadia-Stile speichern eine ganze Route auf deinem iPhone, für eine Wanderung ohne Empfang."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pro añade tres estilos de mapa de montaña pensados para senderos, y los dos estilos de Stadia guardan una ruta entera en tu teléfono para una excursión sin cobertura."
+            "value" : "Pro añade OpenHikes oscuro y tres estilos de mapa de montaña pensados para senderos, y los dos estilos de Stadia guardan una ruta entera en tu teléfono para una excursión sin cobertura."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pro ajoute trois styles de carte de plein air conçus pour les sentiers, et les deux styles Stadia enregistrent un itinéraire entier sur votre iPhone pour randonner sans réseau."
+            "value" : "Pro ajoute OpenHikes sombre et trois styles de carte de plein air conçus pour les sentiers, et les deux styles Stadia enregistrent un itinéraire entier sur votre iPhone pour randonner sans réseau."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pro aggiunge tre stili di mappa outdoor pensati per i sentieri, ed entrambi gli stili Stadia salvano un intero percorso sul telefono per un’escursione senza segnale."
+            "value" : "Pro aggiunge OpenHikes scura e tre stili di mappa outdoor pensati per i sentieri, ed entrambi gli stili Stadia salvano un intero percorso sul telefono per un’escursione senza segnale."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pro voegt drie outdoorkaartstijlen toe die voor paden zijn gemaakt, en beide Stadia-stijlen bewaren een hele route op je telefoon voor een wandeling zonder bereik."
+            "value" : "Pro voegt OpenHikes Donker en drie outdoorkaartstijlen toe die voor paden zijn gemaakt, en beide Stadia-stijlen bewaren een hele route op je telefoon voor een wandeling zonder bereik."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pro dodaje trzy turystyczne style mapy stworzone z myślą o szlakach, a oba style Stadia zapisują całą trasę na telefonie na wędrówkę bez zasięgu."
+            "value" : "Pro dodaje ciemną mapę OpenHikes i trzy turystyczne style mapy stworzone z myślą o szlakach, a oba style Stadia zapisują całą trasę na telefonie na wędrówkę bez zasięgu."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pro adaugă trei stiluri de hartă turistică, concepute pentru trasee, iar ambele stiluri Stadia salvează o rută întreagă pe telefon pentru drumeții fără semnal."
+            "value" : "Pro adaugă harta OpenHikes întunecată și trei stiluri de hartă turistică, concepute pentru trasee, iar ambele stiluri Stadia salvează o rută întreagă pe telefon pentru drumeții fără semnal."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pro добавляет три туристических стиля карты, созданных для троп, а оба стиля Stadia сохраняют весь маршрут на телефон для похода без сигнала."
+            "value" : "Pro добавляет темную карту OpenHikes и три туристических стиля карты, созданных для троп, а оба стиля Stadia сохраняют весь маршрут на телефон для похода без сигнала."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pro додає три туристичні стилі карти, створені для стежок, а обидва стилі Stadia зберігають увесь маршрут на телефоні для походу без сигналу."
+            "value" : "Pro додає темну карту OpenHikes і три туристичні стилі карти, створені для стежок, а обидва стилі Stadia зберігають увесь маршрут на телефоні для походу без сигналу."
           }
         }
       }
@@ -69175,6 +69175,64 @@
         }
       }
     },
+    "The commercial maps are billed per view. Your subscription covers them, so OpenStreetMap stays free." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die kommerziellen Karten werden pro Aufruf abgerechnet. Dein Abo deckt sie ab, damit OpenStreetMap kostenlos bleibt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los mapas comerciales se cobran por visualización. Tu suscripción los cubre, así que OpenStreetMap sigue siendo gratis."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les cartes commerciales sont facturées à l’affichage. Votre abonnement les couvre, pour qu’OpenStreetMap reste gratuit."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le mappe commerciali vengono fatturate per visualizzazione. Il tuo abbonamento le copre, così OpenStreetMap resta gratuito."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voor de commerciële kaarten wordt per weergave betaald. Je abonnement dekt ze, zodat OpenStreetMap gratis blijft."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Komercyjne mapy są rozliczane za każde wyświetlenie. Twoja subskrypcja pokrywa ten koszt, dzięki czemu mapa OpenStreetMap pozostaje bezpłatna."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hărțile comerciale sunt taxate pentru fiecare afișare. Abonamentul dvs. le acoperă, astfel încât OpenStreetMap rămâne gratuit."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коммерческие карты оплачиваются за каждый просмотр. Ваша подписка покрывает эти расходы, поэтому карта OpenStreetMap остается бесплатной."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Комерційні карти оплачуються за кожен перегляд. Ваша підписка покриває ці витрати, тож карта OpenStreetMap залишається безплатною."
+          }
+        }
+      }
+    },
     "The copy you sent to the community stays where it is; deleting this hike does not withdraw it." : {
       "localizations" : {
         "de" : {
@@ -70505,64 +70563,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Не вдалося повернути початковий маршрут."
-          }
-        }
-      }
-    },
-    "The paid maps are billed per view. Your subscription covers them, so OpenStreetMap stays free." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die kostenpflichtigen Karten werden pro Aufruf abgerechnet. Dein Abo deckt sie ab, damit OpenStreetMap kostenlos bleibt."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los mapas de pago se cobran por visualización. Tu suscripción los cubre, así que OpenStreetMap sigue siendo gratis."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les cartes payantes sont facturées à l’affichage. Votre abonnement les couvre, pour qu’OpenStreetMap reste gratuit."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le mappe a pagamento vengono fatturate per visualizzazione. Il tuo abbonamento le copre, così OpenStreetMap resta gratuito."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Voor de betaalde kaarten wordt per weergave betaald. Je abonnement dekt ze, zodat OpenStreetMap gratis blijft."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Płatne mapy są rozliczane za każde wyświetlenie. Twoja subskrypcja pokrywa ten koszt, dzięki czemu mapa OpenStreetMap pozostaje bezpłatna."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hărțile cu plată sunt taxate pentru fiecare afișare. Abonamentul dvs. le acoperă, astfel încât OpenStreetMap rămâne gratuit."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Платные карты оплачиваются за каждый просмотр. Ваша подписка покрывает эти расходы, поэтому карта OpenStreetMap остается бесплатной."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Платні карти оплачуються за кожен перегляд. Ваша підписка покриває ці витрати, тож карта OpenStreetMap залишається безплатною."
           }
         }
       }

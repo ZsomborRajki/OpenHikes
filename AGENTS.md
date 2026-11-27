@@ -895,7 +895,8 @@ is promoted, and stamps the version at build time: the tags, not
   (`Scripts/carto-points.sh`). The archive's landcover is ESA WorldCover's,
   under CC BY 4.0, so the style credits it beside OpenStreetMap.
 - **OpenHikes Dark is the same drawing in other colors**
-  (`TileProvider.openHikesDark`, `osm_dark`). The style keeps Carto's colors,
+  (`TileProvider.openHikesDark`, `osm_dark`), behind OpenHikes Pro (*Platform
+  contracts*). The style keeps Carto's colors,
   and a color reaches the picture only through the tile's
   `VectorTilePalette`, by what it is put down as, so a new draw site asks
   the palette too. A color its table does not name
@@ -1116,11 +1117,14 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
     It is recorded against every purchase.
   - **`MapPaywallView` lists everything Pro unlocks and unlocks everything it
     lists**, because App Review checks both directions. Today that is the paid
-    map styles (Stadia Outdoors, Stamen Terrain, Thunderforest Outdoors), offline
-    Stadia maps, and Stadia elevation where a trail has none. A change updates
-    the paywall, `OpenHikes.storekit`, `docs/terms/` and `docs/support/` in
-    every language, the home page in `docs/`, the README and App Store Connect
-    together.
+    map styles (OpenHikes Dark, Stadia Outdoors, Stamen Terrain, Thunderforest
+    Outdoors), offline Stadia maps, and Stadia elevation where a trail has
+    none. OpenHikes Dark is behind Pro by the owner's decision, though nobody
+    bills for its tiles, so the copy calls only the commercial maps billed
+    per view; a downloaded country stays free, whichever map draws it. A
+    change updates the paywall, `OpenHikes.storekit`, `docs/terms/` and
+    `docs/support/` in every language, the home page in `docs/`, the README
+    and App Store Connect together.
   - Everything else is free, the community included.
   - The paywall stays reachable from About even when no keys are bundled.
 - **Remember only the negative entitlement answer.** `MapEntitlementStore` starts

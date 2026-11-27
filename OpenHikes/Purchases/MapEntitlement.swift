@@ -2,8 +2,8 @@
 //  MapEntitlement.swift
 //  OpenHikes
 //
-//  Whether this device may draw the two commercial tile sources, and the
-//  process-wide answer that the off-main tile code reads.
+//  Whether this device may draw the map styles behind OpenHikes Pro, and
+//  the process-wide answer that the off-main tile code reads.
 //
 //  Deliberately shaped like `Secrets`: a `nonisolated` lookup any thread can
 //  ask, because the question "which map may we draw" is asked from
