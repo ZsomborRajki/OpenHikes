@@ -34,6 +34,11 @@ extension AccessibilityUITests {
     /// A downloaded country's row with an offer under its name, which no
     /// launch that holds nothing draws: with *Extra Detail* off, Slovenia
     /// offers to delete its zoom 15.
+    ///
+    /// Largest first, because the row is under the fold at the sheet's
+    /// middle, and scrolling to it raises the sheet to the height the list
+    /// by name draws its letters at, which the sweep above stays clear of.
+    /// Largest first has no letters at any height.
     @MainActor
     func testOfflineMapsDownloadedRowPassesAccessibilityAudit() throws {
         let app = launchApp(arguments: OfflineMapsFixture.downloadedArguments)
@@ -43,12 +48,16 @@ extension AccessibilityUITests {
         // slides under the search field.
         let extraDetail = app.switches.matching(identifier: "offline-maps-extra-detail").firstMatch
         extraDetail.coordinate(withNormalizedOffset: OfflineMapsFixture.switchKnob).tap()
+        let order = element("offline-maps-order-button", in: app)
+        tapWhenReady(order)
+        tapWhenReady(app.buttons["Largest"])
+        XCTAssertTrue(waitUntil { (order.value as? String) == "Largest" }, "the list should be largest first")
         let offer = element("offline-country-SI-remove", in: app)
         XCTAssertTrue(
             offer.waitForExistence(timeout: UITestTimeout.navigation),
             "the audit is worth nothing against a row with no offer on it"
         )
-        scrollIntoView(offer, in: app)
+        XCTAssertTrue(scrollIntoView(offer, in: app), "the offer should be on screen when the row is swept")
         try audit(app)
     }
 }
