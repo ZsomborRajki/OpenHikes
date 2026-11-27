@@ -2,9 +2,10 @@
 //  AccessibilityUITests+OfflineMaps.swift
 //  OpenHikesUITests
 //
-//  *Offline Maps*: a search field, an order capsule, a switch and a list
-//  whose every row carries its own download button. With no server a
-//  launch running tests has nothing in it, so this sweeps the stand-in list
+//  *Offline Maps*: a search field, an order capsule, two switches and a list
+//  whose every row carries its own download button, and a downloaded row
+//  what the switches offer to add to it or delete. With no server a launch
+//  running tests has nothing in it, so this sweeps the stand-in lists
 //  ``SeededOfflineCountryServer`` serves; nothing downloads.
 //
 
@@ -27,6 +28,27 @@ extension AccessibilityUITests {
             element("offline-country-AT", in: app).waitForExistence(timeout: UITestTimeout.navigation),
             "the audit is worth nothing against a list that has not loaded"
         )
+        try audit(app)
+    }
+
+    /// A downloaded country's row with an offer under its name, which no
+    /// launch that holds nothing draws: with *Extra Detail* off, Slovenia
+    /// offers to delete its zoom 15.
+    @MainActor
+    func testOfflineMapsDownloadedRowPassesAccessibilityAudit() throws {
+        let app = launchApp(arguments: OfflineMapsFixture.downloadedArguments)
+        openOfflineMaps(in: app)
+        XCTAssertTrue(element("offline-country-SI", in: app).waitForExistence(timeout: UITestTimeout.navigation))
+        // Flipped while the list is at its head: scrolled, the switch
+        // slides under the search field.
+        let extraDetail = app.switches.matching(identifier: "offline-maps-extra-detail").firstMatch
+        extraDetail.coordinate(withNormalizedOffset: OfflineMapsFixture.switchKnob).tap()
+        let offer = element("offline-country-SI-remove", in: app)
+        XCTAssertTrue(
+            offer.waitForExistence(timeout: UITestTimeout.navigation),
+            "the audit is worth nothing against a row with no offer on it"
+        )
+        scrollIntoView(offer, in: app)
         try audit(app)
     }
 }

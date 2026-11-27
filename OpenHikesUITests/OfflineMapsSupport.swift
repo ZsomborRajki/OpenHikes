@@ -14,8 +14,15 @@ import XCTest
 nonisolated enum OfflineMapsFixture {
     /// The ten areas of `OfflineCountriesSeed.json`.
     static let seededArguments = ["--ui-test-offline-countries=seeded"]
+    /// The ten again, with Slovenia on the device with its zoom 15.
+    static let downloadedArguments = ["--ui-test-offline-countries=downloaded"]
     /// A list that cannot be loaded.
     static let refusedArguments = ["--ui-test-offline-countries=refused"]
+    /// Where a switch's knob is in its row, which is the whole of its
+    /// element: a tap at the row's middle lands on its title.
+    static let switchKnob = CGVector(dx: knobAcross, dy: knobDown)
+    private static let knobAcross = 0.9
+    private static let knobDown = 0.5
 }
 
 extension XCTestCase {

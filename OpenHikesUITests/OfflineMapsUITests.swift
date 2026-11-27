@@ -11,8 +11,11 @@
 //  session, so nothing here downloads, and nothing pretends to. Each test
 //  stops at the last screen that is true of a real launch — a row that
 //  offers *Download*, or the tile's dialog naming the country and its size —
-//  and never taps the download itself. What each order and a search do to
-//  the list is `OfflineCountryDirectoryTests`'s; this is about the screen.
+//  and never taps the download itself. One launch holds a country as
+//  downloaded, for what its row offers once a switch no longer describes
+//  it; deleting needs no server, so that tap is made. What each order and a
+//  search do to the list is `OfflineCountryDirectoryTests`'s; this is about
+//  the screen.
 //
 //  Every step keeps a screenshot in the result bundle, so a run can be looked
 //  at as well as read.
@@ -174,7 +177,7 @@ nonisolated final class OfflineMapsUITests: XCTestCase {
         let sized = austria.label
         let extraDetail = app.switches.matching(identifier: "offline-maps-extra-detail").firstMatch
         XCTAssertEqual(extraDetail.value as? String, "1", "Extra Detail is on until it is turned off")
-        extraDetail.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        extraDetail.coordinate(withNormalizedOffset: OfflineMapsFixture.switchKnob).tap()
         XCTAssertTrue(
             waitUntilLabelChanges(from: sized, on: austria),
             "without Extra Detail a download costs less, and the row says so: \(sized)"
@@ -193,6 +196,53 @@ nonisolated final class OfflineMapsUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Cancel Download"].exists)
     }
 
+    /// A switch changes nothing a country already holds. Its row offers the
+    /// difference, and the tap on the offer is what deletes, with nothing
+    /// asked in between. Adding is a download, which is where this stops.
+    @MainActor
+    func testADownloadedCountryChangesOnlyAtATapOnItsOffer() {
+        let app = launchApp(arguments: OfflineMapsFixture.downloadedArguments)
+        openOfflineMaps(in: app)
+        let slovenia = element("offline-country-SI", in: app)
+        XCTAssertTrue(slovenia.waitForExistence(timeout: UITestTimeout.navigation), "the seeded list should load")
+        raiseSheet(in: app)
+        let whole = slovenia.label
+        expectLabel(slovenia, contains: "Downloaded", "the seeded country is on the device")
+        let remove = element("offline-country-SI-remove", in: app)
+        let add = element("offline-country-SI-add", in: app)
+        XCTAssertFalse(remove.exists || add.exists, "a country the switches describe offers nothing")
+        keepScreenshot("14 Slovenia downloaded, as the switches ask", of: app)
+
+        let extraDetail = app.switches.matching(identifier: "offline-maps-extra-detail").firstMatch
+        extraDetail.coordinate(withNormalizedOffset: OfflineMapsFixture.switchKnob).tap()
+        XCTAssertTrue(
+            remove.waitForExistence(timeout: UITestTimeout.navigation),
+            "with Extra Detail off, a country that has its zoom 15 offers to delete it"
+        )
+        expectLabel(remove, contains: "Remove Extra Detail", "the offer names the switch it is for")
+        XCTAssertEqual(slovenia.label, whole, "the switch itself deleted nothing")
+        keepScreenshot("15 Extra Detail off: \(remove.label)", of: app)
+
+        remove.tap()
+        XCTAssertTrue(
+            waitUntilLabelChanges(from: whole, on: slovenia),
+            "the tap deletes the zoom 15, and the row says what is left: \(whole)"
+        )
+        XCTAssertTrue(waitUntil { !remove.exists }, "and no alert stands between the tap and the delete")
+        keepScreenshot("16 the zoom 15 deleted: \(slovenia.label), from \(whole)", of: app)
+
+        let trimmed = slovenia.label
+        extraDetail.coordinate(withNormalizedOffset: OfflineMapsFixture.switchKnob).tap()
+        XCTAssertTrue(
+            add.waitForExistence(timeout: UITestTimeout.navigation),
+            "with Extra Detail on again, the country offers its zoom 15 back"
+        )
+        expectLabel(add, contains: "Add Extra Detail", "the offer names the switch it is for")
+        XCTAssertEqual(slovenia.label, trimmed, "the switch itself brought nothing")
+        XCTAssertFalse(app.buttons["Cancel Download"].exists, "and nothing started downloading")
+        keepScreenshot("17 Extra Detail on again: \(add.label)", of: app)
+    }
+
     /// The same list in Settings, beside the storage it costs, where it has
     /// no map to show a country on.
     @MainActor
@@ -201,13 +251,13 @@ nonisolated final class OfflineMapsUITests: XCTestCase {
         openSettings(in: app)
         let row = element("settings-offline-maps", in: app)
         XCTAssertTrue(scrollUntilVisible(row, in: app), "Settings' storage section holds Offline Maps")
-        keepScreenshot("14 Settings, with Offline Maps beside the storage it takes", of: app)
+        keepScreenshot("18 Settings, with Offline Maps beside the storage it takes", of: app)
         row.tap()
 
         XCTAssertTrue(app.navigationBars["Offline Maps"].waitForExistence(timeout: UITestTimeout.navigation))
         XCTAssertTrue(element("offline-country-AT", in: app).waitForExistence(timeout: UITestTimeout.navigation))
         XCTAssertTrue(app.buttons["Download Austria"].exists)
-        keepScreenshot("15 Offline Maps in Settings", of: app)
+        keepScreenshot("19 Offline Maps in Settings", of: app)
     }
 
     /// A hike's *Offline* tile on the OpenHikes map offers the countries its
@@ -226,7 +276,7 @@ nonisolated final class OfflineMapsUITests: XCTestCase {
             "the tile is enabled once it has found the countries the trail crosses"
         )
         scrollIntoView(tile, in: app)
-        keepScreenshot("16 the hike screen's Offline tile", of: app)
+        keepScreenshot("20 the hike screen's Offline tile", of: app)
         tile.tap()
 
         let germany = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Download Germany")).firstMatch
@@ -235,7 +285,7 @@ nonisolated final class OfflineMapsUITests: XCTestCase {
             app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Download Austria")).firstMatch.exists,
             "and in no other country"
         )
-        keepScreenshot("17 the tile's dialog: Germany, and what it costs", of: app)
+        keepScreenshot("21 the tile's dialog: Germany, and what it costs", of: app)
         dismissDialog(in: app)
         XCTAssertTrue(waitUntil { !germany.exists }, "the dialog goes without downloading")
         XCTAssertEqual(tile.value as? String, "Not saved")
@@ -252,7 +302,7 @@ nonisolated final class OfflineMapsUITests: XCTestCase {
             "a list that cannot load says so"
         )
         XCTAssertTrue(app.buttons["Try Again"].exists, "and offers to ask again")
-        keepScreenshot("18 a list that could not load", of: app)
+        keepScreenshot("22 a list that could not load", of: app)
     }
 }
 

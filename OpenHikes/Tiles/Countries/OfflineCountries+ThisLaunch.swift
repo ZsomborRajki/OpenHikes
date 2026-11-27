@@ -17,12 +17,14 @@ extension OfflineCountries {
     /// then it has no session, so nothing downloads.
     static func forThisLaunch() -> OfflineCountries {
         guard !AppLaunchEnvironment.isRunningTests else {
-            return OfflineCountries(
+            let countries = OfflineCountries(
                 store: OfflineCountryStore(directory: FileManager.default.temporaryDirectory),
                 server: seededServer(),
                 downloader: nil,
                 archives: nil
             )
+            seedDownloads(in: countries)
+            return countries
         }
         return OfflineCountries(
             store: .applicationSupport(),
@@ -43,6 +45,19 @@ extension OfflineCountries {
             .map { SeededOfflineCountryServer(scenario: $0) }
         #else
         nil
+        #endif
+    }
+
+    /// Holds as downloaded what the UI scenario this launch named says it
+    /// holds, which is nothing for every one but `downloaded`.
+    private static func seedDownloads(in countries: OfflineCountries) {
+        #if DEBUG
+        guard let scenario = SeededOfflineCountryServer.Scenario(
+            argument: AppLaunchEnvironment.offlineCountriesScenarioName
+        ), scenario == .downloaded,
+            let listed = try? SeededOfflineCountryServer(scenario: scenario).listed()
+        else { return }
+        countries.seed(installed: scenario.downloads(from: listed))
         #endif
     }
 }
