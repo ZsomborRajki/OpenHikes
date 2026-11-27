@@ -1101,7 +1101,7 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   for a walk with junction warnings on, and the `audio` mode is for those
   warnings alone (`JunctionVoice`). Their translations must agree too.
 - **Strings live in String Catalogs, in English, German, French, Spanish,
-  Italian, Russian, Polish, Ukrainian, Romanian and Dutch.** English is the
+  Italian, Russian, Polish, Ukrainian, Romanian, Dutch and Croatian.** English is the
   development language.
   - `xcodebuild` does not merge extracted strings the way the IDE does. After
     changing text, build, then run
@@ -1111,7 +1111,7 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
     bypasses extraction. Intentional machine text and prescribed credits are
     listed with reasons in `Scripts/string-extraction-exclusions.json`; stale
     entries fail the gate.
-  - **Every string gets all nine translations in the same change**, each
+  - **Every string gets all ten translations in the same change**, each
     with `"state" : "translated"`. `StringCatalogTests+Translations.swift`
     fails on a key missing one, on a translation that drops or retypes a
     placeholder, and on a plural without a form its language needs. The
@@ -1145,7 +1145,7 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
     and the archive job's `.lproj` list in `ci.yml`.
   - **The privacy policy, the terms and the support page are published in
     every language**, the translations under `docs/<language>/`. An edit to
-    an English page edits its nine copies in the same change, and the legal
+    an English page edits its ten copies in the same change, and the legal
     pages move their `<time datetime>` together, which
     `Scripts/check-legal-pages.sh` holds them to. No script holds the support
     pages together.
