@@ -41,6 +41,17 @@
 //  the archive is read back by its own directories, every tile counted and
 //  one in 97 compared, byte for byte, with what was written.
 //
+//  ## The whole world, or not
+//
+//  The app reads a square the archive does not hold as sea at 0 m, so an
+//  archive marked complete that left a degree out puts its mountains at sea
+//  level, and a hike saved there keeps those heights. A build is marked
+//  complete only when nothing can have been left out: no `--area`, both
+//  models listed from their public buckets, and each listing at least as
+//  long as the bucket is known to be (``worldDegrees``). A directory of tiles
+//  vouches for nothing, however many it holds, so a build from one is never
+//  the world's, and `upload-archive` refuses it.
+//
 
 import Foundation
 
@@ -57,11 +68,24 @@ struct ElevationBuildOptions {
     /// south-west corners are filed; `nil` for the world.
     var area: (south: Int, west: Int, north: Int, east: Int)?
     var jobs: Int
+
+    /// Whether this build is of the whole world: no `--area`, and both models
+    /// listed from their public buckets, whose listings ``ElevationBuild/run(_:)``
+    /// then holds to ``ElevationBuild/worldDegrees``. See the file header.
+    var coversTheWorld: Bool {
+        area == nil && source == ElevationBuild.defaultSource && coarser == ElevationBuild.defaultCoarser
+    }
 }
 
 enum ElevationBuild {
     static let defaultSource = "https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com"
     static let defaultCoarser = "https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com"
+
+    /// How many tiles each bucket listed on 2026-11-26, the 90 m model's
+    /// being the 30 m one's and the 25 degrees it withholds. A world build
+    /// whose listing comes up shorter stops: a page that never arrived would
+    /// otherwise leave its degrees out of an archive marked complete.
+    static let worldDegrees = (fine: 26_450, coarse: 26_475)
 
     /// A degree of the Earth, by its south-west corner.
     struct Degree: Hashable, Comparable {
@@ -113,6 +137,11 @@ enum ElevationBuild {
     static func run(_ options: ElevationBuildOptions) async throws -> Summary {
         let fineDegrees = try await degrees(in: options.source, resolution: .fine)
         let coarseDegrees = try await degrees(in: options.coarser, resolution: .coarse)
+        if options.coversTheWorld {
+            guard fineDegrees.count >= worldDegrees.fine, coarseDegrees.count >= worldDegrees.coarse else {
+                throw ElevationBuildError.shortListing(fine: fineDegrees.count, coarse: coarseDegrees.count)
+            }
+        }
         let inArea: (Degree) -> Bool = { degree in
             guard let area = options.area else { return true }
             return (area.south..<area.north).contains(degree.south) && (area.west..<area.east).contains(degree.west)
@@ -214,7 +243,7 @@ enum ElevationBuild {
                 "attribution": ElevationCredit.notice,
                 "list": SquareArchive.elevation.listName,
                 "generation": SquareArchive.elevation.generation,
-                "complete": options.area == nil,
+                "complete": options.coversTheWorld,
                 "vector_layers": [Any](),
             ] as [String: Any],
             options: [.sortedKeys]
@@ -228,7 +257,7 @@ enum ElevationBuild {
             generation: SquareArchive.elevation.generation,
             minimumZoom: SquareArchive.elevation.zooms.lowerBound,
             zoom: SquareArchive.elevation.zoom,
-            complete: options.area == nil,
+            complete: options.coversTheWorld,
             builtAt: builtAt,
             packedAt: Date(),
             osmTimestamp: nil,
@@ -544,6 +573,7 @@ enum ElevationBuildError: Error, CustomStringConvertible {
     case readBack(String)
     case outputHoldsOtherFiles(String)
     case degreesFailed([String])
+    case shortListing(fine: Int, coarse: Int)
 
     var description: String {
         switch self {
@@ -559,6 +589,10 @@ enum ElevationBuildError: Error, CustomStringConvertible {
             "\(path) holds files no earlier build wrote; build into a directory of its own."
         case .degreesFailed(let failures):
             "\(failures.count) degrees could not be filed, twice:\n" + failures.joined(separator: "\n")
+        case let .shortListing(fine, coarse):
+            "the buckets listed \(fine) tiles at 30 m and \(coarse) at 90 m, fewer than the "
+                + "\(ElevationBuild.worldDegrees.fine) and \(ElevationBuild.worldDegrees.coarse) they hold, so "
+                + "the world cannot be built from them."
         }
     }
 }

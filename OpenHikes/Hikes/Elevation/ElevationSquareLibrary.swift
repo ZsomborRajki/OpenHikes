@@ -30,7 +30,9 @@
 //    and a square that would not come, or came and was not one, throws
 //    ``CuratedElevationFailure/unreachable``.
 //  - A point whose four posts are not all heights — ground Copernicus
-//    withholds — is `nan`, which every caller passes over.
+//    withholds — is `nan`, and a line with one gets no profile at all
+//    (``CuratedElevationSourcing/samples(of:)``) rather than a grade drawn
+//    across ground nobody measured.
 //
 //  ## What arrived is kept
 //

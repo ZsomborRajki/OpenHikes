@@ -928,7 +928,17 @@ private extension CommunityHikeView {
             // same reason and absent for the same reason when it fails. See
             // ``CommonsPhoto``.
             loadCommonsPhotos(along: detail.route)
-            session.prepared = await Self.prepare(detail)
+            // And, for a route from OpenStreetMap, the heights it does not
+            // carry, started for the same reason: the line and *Add to My
+            // Hikes* do not wait on the tile server. See
+            // ``loadHeights(along:)``.
+            loadHeights(along: detail.route)
+            let prepared = await Self.prepare(detail)
+            // Heights that landed while this walk was out have drawn the
+            // chart from the route as it now is, and this one would take it
+            // away again.
+            guard case .loaded(let shown) = session.phase, shown.route == detail.route else { return }
+            session.prepared = prepared
             // The chart is up, with its marker at the trailhead, so the map's
             // dot goes there too.
             publishChartPosition()
@@ -942,6 +952,44 @@ private extension CommunityHikeView {
             return
         } catch {
             session.phase = .failed(CommunityFailure(error))
+        }
+    }
+
+    /// Asks for the heights a route from OpenStreetMap does not carry, and
+    /// puts them on the detail on screen when they land, with the chart
+    /// drawn from them.
+    ///
+    /// Not awaited by ``load()``: the heights are squares off the tile
+    /// server, and on a poor connection that request can run for its whole
+    /// budget, while the line on the map, the numbers and *Add to My Hikes*
+    /// need none of it. A route saved before they land has no heights yet,
+    /// and is given them the next time it is opened, from the squares this
+    /// request left on the device — see ``HikeElevationFill``. A published
+    /// hike's heights came with it, and **a failure draws nothing**: the
+    /// route stays without a chart, as it was before there were heights to
+    /// ask for — see ``MergedCommunityTransport/filledHeights(of:for:)``.
+    func loadHeights(along route: [RouteCoordinate]) {
+        guard listing.isCurated else { return }
+        // A retry's request replaces the first one's, whose answer is about
+        // a detail no longer on screen.
+        session.heightsTask?.cancel()
+        session.heightsTask = Task {
+            // The detail on screen *now*, not the one the load read: the
+            // contributions and the Commons photographs land on `phase` while
+            // the heights are out, and writing back the earlier copy would
+            // take them off the screen again. And still about the route these
+            // were read for.
+            let filled = await transport.filledHeights(of: route, for: listing)
+            guard filled != route, !Task.isCancelled, case .loaded(var latest) = session.phase,
+                  latest.route == route
+            else { return }
+            latest.route = filled
+            session.phase = .loaded(latest)
+            let prepared = await Self.prepare(latest)
+            guard !Task.isCancelled, case .loaded(let shown) = session.phase, shown.route == filled else { return }
+            session.prepared = prepared
+            // The first chart this route has had, so its dot goes up with it.
+            publishChartPosition()
         }
     }
 

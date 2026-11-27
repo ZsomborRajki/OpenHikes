@@ -95,8 +95,9 @@ struct ElevationSquareLibraryTests {
     }
 
     /// Ground whose heights Copernicus does not give away is filed as posts
-    /// with no height, and a point among them is `nan`, which every caller
-    /// passes over — never a height of 0 m on a mountain.
+    /// with no height, and a point among them is `nan` — never a height of
+    /// 0 m on a mountain. A line with one has no profile at all
+    /// (`CuratedElevationTests`).
     @Test("a point beside a post with no height has none")
     func withheldGround() async throws {
         let unknown = 100 * 450 + 101

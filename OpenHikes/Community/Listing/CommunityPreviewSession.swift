@@ -178,6 +178,14 @@ final class CommunityPreviewSession {
     /// The Wikimedia Commons photographs of a curated route, held for the
     /// reason ``contributionsTask`` is and in the same wait list.
     @ObservationIgnored var commonsTask: Task<Void, Never>?
+    /// The heights of a curated route, held so leaving stops the request.
+    ///
+    /// Not in ``end()``'s wait list, for the analysis's reason: it writes
+    /// nothing into the download directory — the squares go to `Caches` —
+    /// and the import does not wait for it either, so a hiker quick on *Add
+    /// to My Hikes* saves the route without them. See
+    /// ``CommunityHikeView/loadHeights(along:)``.
+    @ObservationIgnored var heightsTask: Task<Void, Never>?
     /// Whether the route has left the path. Nothing starts after it has.
     @ObservationIgnored private(set) var hasEnded = false
 
@@ -237,10 +245,11 @@ final class CommunityPreviewSession {
         loadTask?.cancel()
         contributionsTask?.cancel()
         commonsTask?.cancel()
-        // Nothing waits for this one; it is cancelled because a preview that
-        // has gone has no use for an answer and no right to keep asking
-        // Overpass for it.
+        // Nothing waits for these two; they are cancelled because a preview
+        // that has gone has no use for an answer and no right to keep asking
+        // Overpass, or the tile server, for it.
         analysisTask?.cancel()
+        heightsTask?.cancel()
         CommunityHikeView.discardDownloads(
             at: downloadDirectory,
             after: [loadTask, importTask, contributionsTask, commonsTask]

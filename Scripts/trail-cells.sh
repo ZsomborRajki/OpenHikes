@@ -146,8 +146,10 @@
 #             directory of its tiles for a test) and the names of the 90 m
 #             model's (--coarser), for the land the 30 m one withholds; see
 #             Scripts/lib/trail-cells/ElevationBuild.swift. --area limits it
-#             to whole degrees, south,west,north,east, which upload-archive
-#             then refuses. --jobs reads that many tiles at once (16).
+#             to whole degrees, south,west,north,east. Only a build of both
+#             buckets with no --area, each listing as long as the bucket is
+#             known to be, is marked the whole world; upload-archive refuses
+#             every other. --jobs reads that many tiles at once (16).
 #             Measured on the world on 2026-11-26: 589 GB read in 2 h 47 min
 #             with --jobs 24, about 60 MB/s, into an archive of 66.4 GB, which
 #             upload-archive then sent in 248 parts.

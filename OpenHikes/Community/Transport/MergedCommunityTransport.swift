@@ -105,7 +105,7 @@ nonisolated struct MergedCommunityTransport: CommunityTransporting {
     let published: any CommunityTransporting
     let curated: any CuratedTrailSourcing
     /// Where a curated route's heights come from, asked once when one is
-    /// opened — see ``CuratedElevation``.
+    /// on screen — see ``CuratedElevation`` and ``filledHeights(of:for:)``.
     ///
     /// Defaulted to the source that answers nothing rather than to the real
     /// one, so a caller that has not thought about it cannot reach the tile
@@ -294,15 +294,12 @@ nonisolated extension MergedCommunityTransport {
         guard let trail = try await curated.trail(of: relationID) else {
             throw CommunityFailure.noLongerAvailable
         }
-        // The heights OpenStreetMap does not have, on the route that is about
-        // to be drawn. Here rather than on the list for the reason the surface
-        // analysis is: a page offers twenty-five routes and a hiker opens one.
-        // A failure leaves the route exactly as it came and the hike opens
-        // without a chart — see ``CuratedElevationSourcing/filled(_:)``.
-        let route = await elevation.filled(trail.route)
+        // Without its heights: those are asked for once the route is on
+        // screen, so neither the line nor the Add button waits on them — see
+        // ``filledHeights(of:for:)``.
         return CommunityHikeDetail(
             listing: CommunityListing(curated: trail, editedAt: listing.publishedAt),
-            route: route,
+            route: trail.route,
             // OSM's `description` on a route relation is characteristically a
             // list of the places it passes — "Wimbachgrieshütte - Trischübel -
             // Ingolstädter Haus" — which is exactly what the hike screen's
@@ -443,6 +440,22 @@ nonisolated extension MergedCommunityTransport {
     ) async throws -> [CommonsPhoto] {
         guard listing.isCurated else { return [] }
         return try await commons.photos(along: route, downloadingInto: directory)
+    }
+
+    /// The heights OpenStreetMap does not have, on a curated route already on
+    /// screen, and nothing for anything else.
+    ///
+    /// Asked when a route is opened rather than for the list, for the reason
+    /// the surface analysis is: a page offers twenty-five routes and a hiker
+    /// opens one. Routed on the origin like ``commonsPhotos(for:along:downloadingInto:)``:
+    /// a published hike's heights are its author's. A square that would not
+    /// come, and ground with no heights, leave the route exactly as it came,
+    /// which costs the chart and nothing else — see
+    /// ``CuratedElevationSourcing/filled(_:)``.
+    @concurrent
+    func filledHeights(of route: [RouteCoordinate], for listing: CommunityListing) async -> [RouteCoordinate] {
+        guard listing.isCurated else { return route }
+        return await elevation.filled(route)
     }
 
     @concurrent

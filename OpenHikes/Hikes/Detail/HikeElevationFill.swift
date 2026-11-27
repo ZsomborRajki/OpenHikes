@@ -3,9 +3,10 @@
 //  OpenHikes
 //
 //  Heights for a hike in the library that has none — a GPX exported without
-//  `<ele>`, or a trail drawn or a route saved from OpenStreetMap while the
-//  heights were still OpenHikes Pro's — read once from the elevation squares
-//  and written onto the hike so it never has to ask again.
+//  `<ele>`, a trail drawn or a route saved from OpenStreetMap while the
+//  heights were still OpenHikes Pro's, or a route saved from its preview
+//  before its heights had landed — read once from the elevation squares and
+//  written onto the hike so it never has to ask again.
 //
 //  The same question the trail maker and a curated route ask, through the
 //  same source (``ElevationSquareLibrary``), so it costs a few squares per
