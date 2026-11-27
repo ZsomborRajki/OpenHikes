@@ -3,10 +3,12 @@
 //  OpenHikesTests
 //
 //  *Extra Detail*: an area's zoom 15, with its buildings and most of its
-//  points, which a download takes only when the switch is on. Turning it on
-//  brings zoom 15 to every area already down, turning it off deletes it and
-//  keeps the areas, and the map draws closest in from zoom 15 where it is
-//  there and from the zoom-14 tile around it where it is not.
+//  points, which a download takes only when the switch is on. The switch
+//  changes no area already down: one without its zoom 15 offers it once the
+//  switch is on, one with it offers to delete it once the switch is off, and
+//  only the hiker's tap on the offer brings or deletes it. The map draws
+//  closest in from zoom 15 where it is there and from the zoom-14 tile
+//  around it where it is not.
 //
 
 import Foundation
@@ -81,7 +83,7 @@ struct OfflineCountriesDetailTests {
         }
     }
 
-    @Test("turning Extra Detail on brings zoom 15, and only zoom 15, to an area already down")
+    @Test("turning Extra Detail on brings nothing to an area already down, which offers its zoom 15, for a tap")
     func turningOn() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [slovenia])
@@ -89,11 +91,20 @@ struct OfflineCountriesDetailTests {
             harness.countries.download(slovenia)
             try harness.land(allFiles.filter { !$0.key.isDetail })
             await settleDelegateHop(until: "the area is down") { harness.countries.isInstalled("SI") }
+            #expect(harness.countries.addition(to: "SI") == nil, "it has all the switches ask for")
 
             harness.countries.setIncludesDetail(true)
+            #expect(harness.downloader.requests.count == 2, "the switch asks for nothing")
+            #expect(harness.countries.downloads["SI"] == nil)
+            let offer = try #require(harness.countries.addition(to: "SI"))
+            #expect(offer.extras == .detail)
+            #expect(offer.byteCount == Int64(detail.count + detailExtras.count))
+
+            harness.countries.extend("SI")
             let added = harness.downloader.requests.dropFirst(2)
             #expect(Set(added.map(\.key.role)) == [.detail, .detailExtras])
-            #expect(harness.countries.downloads["SI"]?.byteCount == Int64(detail.count + detailExtras.count))
+            #expect(harness.countries.downloads["SI"]?.byteCount == offer.byteCount)
+            #expect(harness.countries.addition(to: "SI") == nil, "the row is the download's while it comes")
             try harness.land(allFiles.filter(\.key.isDetail))
             await settleDelegateHop(until: "the area has its zoom 15") {
                 harness.countries.installed["SI"]?.hasDetail == true && harness.countries.downloads["SI"] == nil
@@ -101,10 +112,11 @@ struct OfflineCountriesDetailTests {
 
             #expect(slovenia.files.allSatisfy(harness.fileExists))
             #expect(harness.store.installed().first?.hasDetail == true)
+            #expect(harness.countries.addition(to: "SI") == nil)
         }
     }
 
-    @Test("turning Extra Detail off deletes zoom 15 and keeps the area")
+    @Test("turning Extra Detail off deletes nothing, and the area offers to delete its zoom 15, which a tap does")
     func turningOff() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [slovenia])
@@ -113,8 +125,16 @@ struct OfflineCountriesDetailTests {
             await settleDelegateHop(until: "the map draws zoom 15") {
                 harness.archives.tile(for: Self.close, deepest: 15, extrasFrom: 14)?.dataTile == Self.close
             }
+            #expect(harness.countries.removal(from: "SI") == nil, "it holds only what the switches ask for")
 
             harness.countries.setIncludesDetail(false)
+            #expect(harness.countries.installed["SI"]?.hasDetail == true)
+            #expect(slovenia.files.allSatisfy(harness.fileExists), "the switch deletes nothing")
+            let offer = try #require(harness.countries.removal(from: "SI"))
+            #expect(offer.extras == .detail)
+            #expect(offer.byteCount == Int64(detail.count + detailExtras.count))
+
+            harness.countries.trim("SI")
             await settleDelegateHop(until: "the map draws from zoom 14 again") {
                 harness.archives.tile(for: Self.close, deepest: 15, extrasFrom: 14)?.dataTile == Self.base
             }
@@ -124,10 +144,13 @@ struct OfflineCountriesDetailTests {
                 #expect(harness.fileExists(file) == !file.role.isDetail, "\(file.fileName)")
             }
             #expect(harness.store.installed().first?.hasDetail == false)
+            #expect(harness.countries.removal(from: "SI") == nil)
         }
     }
 
-    @Test("turning Extra Detail off stops a download of zoom 15 alone, and leaves the area")
+    /// The hiker asked for it on its row, and the switch is no way to take
+    /// that back: the ring on the row is.
+    @Test("turning Extra Detail off leaves the zoom 15 the hiker asked for coming, and it is then offered to delete")
     func turningOffMidway() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let harness = await OfflineCountryHarness.make(in: directory, offering: [slovenia])
@@ -136,13 +159,18 @@ struct OfflineCountriesDetailTests {
             try harness.land(allFiles.filter { !$0.key.isDetail })
             await settleDelegateHop(until: "the area is down") { harness.countries.isInstalled("SI") }
             harness.countries.setIncludesDetail(true)
+            harness.countries.extend("SI")
             #expect(harness.countries.downloads["SI"] != nil)
 
             harness.countries.setIncludesDetail(false)
 
-            #expect(harness.downloader.cancelled == ["SI"])
-            #expect(harness.countries.downloads["SI"] == nil)
-            #expect(harness.countries.isInstalled("SI"))
+            #expect(harness.downloader.cancelled.isEmpty)
+            #expect(harness.countries.downloads["SI"]?.hasFailed == false)
+            #expect(harness.countries.removal(from: "SI") == nil, "the row is the download's while it comes")
+            try harness.land(allFiles.filter(\.key.isDetail))
+            await settleDelegateHop(until: "the zoom 15 is in") { harness.countries.downloads["SI"] == nil }
+            #expect(harness.countries.installed["SI"]?.hasDetail == true)
+            #expect(harness.countries.removal(from: "SI")?.extras == .detail)
         }
     }
 
@@ -159,6 +187,7 @@ struct OfflineCountriesDetailTests {
             try harness.land(allFiles.filter { !$0.key.isDetail })
             await settleDelegateHop(until: "the area is down") { harness.countries.isInstalled("SI") }
             harness.countries.setIncludesDetail(true)
+            harness.countries.extend("SI")
             #expect(harness.countries.downloads["SI"] != nil)
 
             harness.countries.delete("SI")

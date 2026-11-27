@@ -280,9 +280,9 @@ struct OfflineCountriesRetryTests {
         }
     }
 
-    /// The zoom 15 of a build the server has deleted is a 404, and asked for
-    /// at every launch it left a failed row on an area that was whole.
-    @Test("Extra Detail asks for no zoom 15 of a build the server has moved past, and the update is offered")
+    /// The zoom 15 of a build the server has deleted is a 404, so the area
+    /// offers none of it: its update brings what the switches say.
+    @Test("an area the server has moved past offers no zoom 15 of the build that is down, and the update is offered")
     func noDetailOfAnOldBuild() async throws {
         try await OfflineCountryFixture.withDirectory { directory in
             let old = OfflineCountryFixture.country(bytes: basemap, build: "20261117", detail: detail)
@@ -297,6 +297,8 @@ struct OfflineCountriesRetryTests {
             let asked = setup.downloader.requests.count
 
             setup.countries.setIncludesDetail(true)
+            #expect(setup.countries.addition(to: "SI") == nil)
+            setup.countries.extend("SI")
 
             #expect(setup.downloader.requests.count == asked)
             #expect(setup.countries.downloads["SI"] == nil)

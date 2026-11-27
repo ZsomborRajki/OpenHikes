@@ -46,7 +46,7 @@ nonisolated final class OfflineCountryArchives: Sendable {
         /// What it was installed from: the outline, the build and when.
         /// `nil` draws from it all the same, and redraws nothing.
         var record: OfflineCountryStore.Record?
-        /// Zoom 15 and its extras, where *Extra Detail* brought them.
+        /// Zoom 15 and its extras, where the area has them.
         var detail: PMTilesArchive?
         var detailExtras: PMTilesArchive?
         /// The day hikes' squares round it, where its download brought them.

@@ -6,7 +6,7 @@
 //  the map and the searches to read: what ``OfflineCountries`` hands to
 //  ``OfflineCountryArchives`` at every launch and after every change to what
 //  is installed. Each area opens the files its record says are on the
-//  device, the heights among them where *Elevation Data* brought them.
+//  device, the heights among them where it has them.
 //
 
 import Foundation

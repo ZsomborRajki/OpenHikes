@@ -967,6 +967,16 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   files: the basemap and the extras to zoom 14, which every download takes,
   and both at zoom 15, which the switch adds
   (`SettingsKey.offlineCountriesDetail`, on by default).
+- **A switch changes no area already down**, by the owner's decision.
+  *Extra Detail* and *Elevation Data* say what a download takes as it
+  starts, and flipping one brings nothing, deletes nothing and stops
+  nothing. A downloaded area's row offers what the switches ask for that it
+  lacks, at its size, and what it holds that they no longer ask for, and
+  only a tap on the offer downloads or deletes, with no alert between
+  (`OfflineCountries.extend(_:)` and `trim(_:)`,
+  `OfflineCountries+Extras.swift`). Nothing else may bring a switch's files
+  to an area: not a launch, not a read of the list, not the end of another
+  download.
 - **An area carries its day hikes** (`OfflineCountryManifest.Role.trails`),
   a fifth file every download takes: the trails archive's squares within a
   wide margin of the outline (`Scripts/lib/offline-countries/Trails.swift`),
@@ -979,7 +989,8 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   - A file a build gains after it is up goes up beside it under the same
     build (`Scripts/offline-countries.sh trails`, then `upload`), and an area
     already down brings it at the next read of the list
-    (`OfflineCountries.reconcile()`), never as an update.
+    (`OfflineCountries.bringGainedFiles()`), never as an update. That is
+    for a file every download takes: one a switch decides is only offered.
 - **An area carries its heights while *Elevation Data* is on**
   (`OfflineCountryManifest.Role.elevation`,
   `SettingsKey.offlineCountriesElevation`, on by default), a sixth file on
@@ -988,10 +999,8 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
   so a line there is given its heights with no signal.
   - The switch is the hiker's, by the owner's decision, because over ice or
     a vast area the heights outweigh the map many times. It works as *Extra
-    Detail* does: on brings the heights to every area down, off deletes
-    them and keeps the areas (`OfflineCountries.reconcile()`). Each record
-    says whether it has them (`OfflineCountryStore.Record.hasElevation`),
-    and so does its row.
+    Detail* does. Each record says whether it has them
+    (`OfflineCountryStore.Record.hasElevation`), and so does its row.
   - A square of sea is a tile of it, every post at 0 m at its row's size,
     so a square it lacks is one it says nothing about
     (`DownloadedElevationSquares`, `ElevationSquareLibrary`). A build
@@ -1050,7 +1059,7 @@ Maps*. `OfflineCountries` is the one owner, on the main actor.
 - **No suite reaches the server or the session.**
   `OfflineCountries.forThisLaunch()` has neither under `isRunningTests`. The
   one way past the server is
-  `--ui-test-offline-countries=<seeded|showcase|refused>`
+  `--ui-test-offline-countries=<seeded|downloaded|showcase|refused>`
   (`SeededOfflineCountryServer`), and still no session, so nothing downloads.
 
 ### Accessibility

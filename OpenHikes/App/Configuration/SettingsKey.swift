@@ -119,13 +119,15 @@ nonisolated enum SettingsKey {
     /// three answers that have to agree, the others being a live subject and
     /// a foreground app.
     static let keepScreenAwake = "settings.keepScreenAwake"
-    /// Whether a downloaded country brings zoom 15 too, with its buildings
+    /// Whether a country's download takes zoom 15 too, with its buildings
     /// and most of its points, for about twice the space — *Extra Detail*
-    /// under *Offline Maps*. Read and written by ``OfflineCountries``.
+    /// under *Offline Maps*. It changes no country already down, whose row
+    /// offers the difference. Read and written by ``OfflineCountries``.
     static let offlineCountriesDetail = "settings.offlineCountriesDetail"
-    /// Whether a downloaded country brings its heights too, so a line there
+    /// Whether a country's download takes its heights too, so a line there
     /// is given its elevation profile with no signal — *Elevation Data*
-    /// under *Offline Maps*. Read and written by ``OfflineCountries``.
+    /// under *Offline Maps*, on *Extra Detail*'s terms. Read and written by
+    /// ``OfflineCountries``.
     static let offlineCountriesElevation = "settings.offlineCountriesElevation"
     /// Whether the map around the selected hike is kept as it is browsed —
     /// *Auto-Save Tiles* in Settings; see ``AutoSaveController``, which reads

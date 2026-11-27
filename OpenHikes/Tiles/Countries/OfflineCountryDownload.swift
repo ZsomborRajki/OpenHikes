@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  One area's download in progress: the files it is for — the whole area,
-//  or only the zoom 15 *Extra Detail* adds to one already down — how far it
+//  or only what the hiker asked to add to one already down — how far it
 //  has come, which are whole in the staging directory, and what the session
 //  handed back to resume the rest from. An object of its own, observed by its row alone,
 //  so a progress tick re-runs that row and nothing above it (*Render
