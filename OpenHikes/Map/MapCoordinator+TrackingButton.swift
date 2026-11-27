@@ -92,8 +92,8 @@ extension MapView.Coordinator {
     /// can land first in a rotation, and each is measured against what the
     /// other last left.
     ///
-    /// The pill's place across the map is settled here too, ahead of its
-    /// height, which the column it stands in has a say in.
+    /// The pill's place across the map is settled here too, ahead of the
+    /// row's height, which the column it stands in has a say in.
     func applySheetTopIfGeometryChanged(on mapView: MKMapView) {
         var geometry = RowGeometry(
             height: mapView.bounds.height,
@@ -131,9 +131,7 @@ extension MapView.Coordinator {
     ///
     /// Everything on this row takes the same constant and the same opacity,
     /// which is the reason the pill is a UIKit subview at all — see
-    /// ``MapPhotoControlsView``. The one exception is the tracking pill in
-    /// the column a closed iPhone Duo keeps for it, which has a limit of its
-    /// own under the row's — see ``trailingColumnLimit``.
+    /// ``MapPhotoControlsView``.
     ///
     /// Two constraints rather than three. The camera pill has no driven
     /// constant of its own: it is constrained a fixed gap above the credit
@@ -144,7 +142,7 @@ extension MapView.Coordinator {
         let wanted = sheetTop(in: mapView) - Self.trackingButtonSpacing
         let limit = trackingButtonLimit(in: mapView)
         let controls = max(wanted, limit)
-        trackingBottomConstraint?.constant = max(controls, trailingColumnLimit)
+        trackingBottomConstraint?.constant = controls
         attributionBottomConstraint?.constant = controls
         applyControlAlpha(
             encroachment: limit - wanted,
@@ -217,28 +215,22 @@ extension MapView.Coordinator {
     /// Clear of the status bar and the Dynamic Island, measured from the map's
     /// own safe area and the controls' own height rather than from a fraction
     /// of the screen.
+    ///
+    /// Or from the top of the column the pill stands in, where that is the
+    /// lower of the two: a closed iPhone Duo stands its status bar up at the
+    /// top of that column and leaves the map no top inset at all — see
+    /// `MapTrailingBarColumn.swift`. The whole row takes it, the credit line
+    /// across the map included, because the row is one height.
     private func clearOfStatusBar(in mapView: MKMapView) -> CGFloat {
-        mapView.safeAreaInsets.top
+        max(mapView.safeAreaInsets.top, trailingColumnTop)
             + trackingButtonHeight
             + Self.trackingButtonSpacing
     }
 
-    /// The highest the pill may stand in the column the system keeps beyond
-    /// the safe area, as the Y of its bottom edge, and nothing where there is
-    /// no such column — see `MapTrailingBarColumn.swift`.
-    ///
-    /// A limit of the pill's own, under the row's. A closed iPhone Duo stands
-    /// its status bar up at the top of that column and leaves the map no top
-    /// inset, so the row's limit lets the pill climb to the status items: at
-    /// the middle detent the 2D button standing on it came to rest 3 points
-    /// under them. So the pill stops where that button, up or not, stands
-    /// clear of the column's top, which on that display is 9 points short of
-    /// where the row stops, and 7 points above the sheet. The credit line
-    /// across the map has nothing over it and keeps the row's limit.
-    private var trailingColumnLimit: CGFloat {
+    /// The top of the column the pill stands in, where the system keeps one.
+    private var trailingColumnTop: CGFloat {
         #if os(iOS)
-        guard let column = trackingPillPlacement?.column else { return 0 }
-        return column.topInset + MapView.flattenButtonReach + trackingButtonHeight
+        trackingPillPlacement?.column?.topInset ?? 0
         #else
         0
         #endif

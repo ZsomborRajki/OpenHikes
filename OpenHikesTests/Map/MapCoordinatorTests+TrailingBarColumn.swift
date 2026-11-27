@@ -4,7 +4,8 @@
 //
 //  Where the pill on the trailing edge stands once the system keeps a column
 //  for it beyond the safe area, as a closed iPhone Duo does: in the column,
-//  with the 2D button over it, and under the status items at the column's top.
+//  with the 2D button over it, level with the row across the map, and under
+//  the status items at the column's top.
 //
 //  No simulator the gates run on has such a column, and a map here has no
 //  window to ask. So the column is handed to the pill's placement as the
@@ -28,6 +29,8 @@ extension MapCoordinatorTests {
     /// Where the sheet's middle detent rests on it, measured.
     private static let coverMiddleDetent: CGFloat = 321
     private static let rowSpacing: CGFloat = 16
+    /// A sheet dragged nearly to the top of the map.
+    private static let nearTheTop: CGFloat = 8
 
     /// A map the size of the cover display, with the pill in its column.
     ///
@@ -79,44 +82,18 @@ extension MapCoordinatorTests {
         let pill = try #require(coordinator.trackingButton)
         let flatten = try #require(coordinator.flattenButton)
         #expect(flatten.frame.maxX == map.bounds.maxX - column.trailingInset)
-        #expect(flatten.frame.maxY == pill.frame.minY - (MapView.flattenButtonReach - MapGlassPill.controlSize))
+        #expect(flatten.frame.maxY < pill.frame.minY)
     }
 
-    /// The sheet's middle detent rests high enough on the cover display for
-    /// the 2D button, standing on a pill 16 points over the sheet, to reach
-    /// into the status items the column starts under. So the pill stops
-    /// short, and the row across the map, with nothing over it, does not.
-    @Test("in the column the pill stops where the 2D button clears the status items")
-    func trackingPillStopsUnderTheColumnTop() throws {
+    /// One row across the map, by the owner's decision: at the cover display's
+    /// middle detent the pill stands 16 points over the sheet as the credit
+    /// line opposite does, and the 2D button on it is left close under the
+    /// status items — see `MapTrailingBarColumn.swift`.
+    @Test("in the column the pill keeps the row's height at the middle detent")
+    func trackingPillKeepsTheRowInTheColumn() throws {
         let coordinator = MapView.Coordinator()
-        let (map, column) = try coverMap(coordinator)
+        let (map, _) = try coverMap(coordinator)
         defer { detach(map) }
-        let tracking = try #require(coordinator.trackingBottomConstraint)
-        let credit = try #require(coordinator.attributionBottomConstraint)
-        let pill = try #require(coordinator.trackingButton)
-        let flatten = try #require(coordinator.flattenButton)
-
-        // Low on the map, the pill rides the row.
-        sheetMetrics.topY = Self.coverHeight - 100
-        coordinator.applySheetTop(on: map)
-        #expect(tracking.constant == sheetMetrics.topY - Self.rowSpacing)
-        #expect(credit.constant == tracking.constant)
-
-        sheetMetrics.topY = Self.coverMiddleDetent
-        coordinator.applySheetTop(on: map)
-        layOut(map)
-        #expect(credit.constant == Self.coverMiddleDetent - Self.rowSpacing, "the row keeps its own limit")
-        #expect(flatten.frame.minY == column.topInset, "the 2D button is clear of the column's top")
-        #expect(pill.frame.maxY < Self.coverMiddleDetent, "and the pill is still above the sheet")
-    }
-
-    @Test("with no column the pill keeps the row's height at the same detent")
-    func trackingPillKeepsTheRowWithoutAColumn() throws {
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(), coordinator)
-        defer { detach(map) }
-        map.frame = CGRect(x: 0, y: 0, width: Self.coverWidth, height: Self.coverHeight)
-        map.layoutIfNeeded()
         let tracking = try #require(coordinator.trackingBottomConstraint)
         let credit = try #require(coordinator.attributionBottomConstraint)
 
@@ -124,6 +101,32 @@ extension MapCoordinatorTests {
         coordinator.applySheetTop(on: map)
         #expect(tracking.constant == Self.coverMiddleDetent - Self.rowSpacing)
         #expect(credit.constant == tracking.constant)
+    }
+
+    /// The cover display gives the map no top inset, and its status items
+    /// stand at the top of the column. So a sheet carried to the top leaves
+    /// the row under the column's top, where on any other display it leaves
+    /// it under the map's own inset.
+    @Test("in the column the row stops under the status items, as one row")
+    func rowStopsUnderTheColumnTop() throws {
+        let coordinator = MapView.Coordinator()
+        let (map, column) = try coverMap(coordinator)
+        defer { detach(map) }
+        let tracking = try #require(coordinator.trackingBottomConstraint)
+        let credit = try #require(coordinator.attributionBottomConstraint)
+        let pill = try #require(coordinator.trackingButton)
+
+        sheetMetrics.topY = Self.nearTheTop
+        coordinator.applySheetTop(on: map)
+        layOut(map)
+        #expect(pill.frame.minY == column.topInset + Self.rowSpacing)
+        #expect(credit.constant == tracking.constant)
+
+        // Unfolded, there is no column and the map's own inset is the limit.
+        coordinator.trackingPillPlacement?.stand(in: nil)
+        coordinator.applySheetTop(on: map)
+        layOut(map)
+        #expect(pill.frame.minY == map.safeAreaInsets.top + Self.rowSpacing)
     }
 }
 #endif

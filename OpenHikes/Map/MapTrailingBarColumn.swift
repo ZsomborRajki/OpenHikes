@@ -35,8 +35,16 @@
 //
 //  The region is centered on the status items above it, and starts under
 //  them. The map's own top inset is nothing on that display, so the column's
-//  top is what keeps the pill, and the 2D button standing on it, out of the
-//  status items — see ``MapView/Coordinator/applySheetTop(on:)``.
+//  top is what the row stops under when the sheet is carried past it — see
+//  ``MapView/Coordinator/applySheetTop(on:)``.
+//
+//  The row stays one height across the map, by the owner's decision. The
+//  sheet's middle detent rests high on the cover display (321 points down
+//  678), so the 2D button, standing on a pill 16 points over the sheet, comes
+//  to rest 9 points into what the system keeps for the status items, and 3
+//  points under them while the location arrow is up. Stopping the pill
+//  alone short of that left it 9 points lower than the credit line opposite,
+//  and the owner chose the level row and the tight fit.
 //
 //  The pill alone moves, with the 2D button, which is constrained to it. The
 //  activity capsule across the map stops as far short of the pill as it does
