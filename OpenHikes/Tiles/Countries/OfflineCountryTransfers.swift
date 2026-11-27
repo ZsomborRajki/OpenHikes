@@ -13,8 +13,9 @@
 //  the owner once it has ended, so a task it replaced is still told apart
 //  from it. A file this launch has started nothing for is an earlier
 //  launch's, whose tasks are taken as they come, unless a cancel has ended
-//  its area since: then nothing of that area is taken until a task is
-//  started for it again. A background session gives a new task an
+//  its area since, or ended that one file: then nothing of the area, or of
+//  the file, is taken until a task is started for it again. A background
+//  session gives a new task an
 //  identifier none of its tasks has, an earlier launch's included, even
 //  one that finished while the app was away and has yet to say so (watched
 //  on an iOS 27.2 simulator and on macOS), so an earlier launch's task is
@@ -42,6 +43,9 @@ nonisolated struct OfflineCountryTransfers: Sendable {
     private var owners: [OfflineCountryDownloadKey: Int] = [:]
     /// The areas a cancel ended in this launch.
     private var cancelled: Set<String> = []
+    /// The files a cancel ended on their own, their areas' others left
+    /// running.
+    private var cancelledFiles: Set<OfflineCountryDownloadKey> = []
     /// Where each owner's file goes.
     private var staging: [OfflineCountryDownloadKey: URL] = [:]
     private var lastProgress: [OfflineCountryDownloadKey: ContinuousClock.Instant] = [:]
@@ -51,7 +55,7 @@ nonisolated struct OfflineCountryTransfers: Sendable {
     /// Whether `transfer`'s callbacks are its file's.
     func takes(_ transfer: OfflineCountryTransfer) -> Bool {
         if let owner = owners[transfer.key] { return owner == transfer.task }
-        return !cancelled.contains(transfer.key.country)
+        return !cancelled.contains(transfer.key.country) && !cancelledFiles.contains(transfer.key)
     }
 
     /// `transfer` is starting, with its file to be staged at `url`, and
@@ -62,6 +66,7 @@ nonisolated struct OfflineCountryTransfers: Sendable {
         staging[key] = url
         lastProgress[key] = nil
         landed.remove(key)
+        cancelledFiles.remove(key)
     }
 
     /// The area `country` was cancelled: no task of it is taken, an earlier
@@ -74,6 +79,17 @@ nonisolated struct OfflineCountryTransfers: Sendable {
             lastProgress[key] = nil
             landed.remove(key)
         }
+    }
+
+    /// The one file `key` names was cancelled, and its area's others were
+    /// not: no task of that file is taken, an earlier launch's included,
+    /// until one is started for it again.
+    mutating func cancel(_ key: OfflineCountryDownloadKey) {
+        cancelledFiles.insert(key)
+        owners[key] = nil
+        staging[key] = nil
+        lastProgress[key] = nil
+        landed.remove(key)
     }
 
     /// Whether progress `transfer` reports `now` is passed on: it is its
