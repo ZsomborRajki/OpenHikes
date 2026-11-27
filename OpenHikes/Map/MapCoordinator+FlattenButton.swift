@@ -104,6 +104,10 @@ extension MapView {
     /// The gap between the 2D button and the tracking pill under it: two
     /// controls in one column, not one pill.
     private static let flattenButtonSpacing: CGFloat = 8
+    /// How far above the tracking pill the 2D button reaches, which is the
+    /// room the pill leaves over itself where something stands above both —
+    /// see ``MapView/Coordinator/applySheetTop(on:)``.
+    static let flattenButtonReach = flattenButtonSpacing + MapGlassPill.controlSize
     private static let flattenTitlePointSize: CGFloat = 15
 
     /// The 2D button, in a glass capsule of its own over `tracking`, the

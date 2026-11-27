@@ -458,10 +458,10 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.trackingBottomConstraint = bottom
 
         let guide = makeControlsGuide(in: mapView, coordinator)
-        NSLayoutConstraint.activate([
-            glass.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -Self.controlInset),
-            bottom,
-        ])
+        // Against the safe area, until the map says the system keeps a column
+        // beyond it — see `MapTrailingBarColumn.swift`.
+        coordinator.trackingPillPlacement = TrackingPillPlacement(of: glass, on: mapView, alignedTo: guide)
+        bottom.isActive = true
         // And the 2D button standing on the pill, there only while the map
         // is tilted — see `MapCoordinator+FlattenButton.swift`.
         addFlattenButton(to: mapView, coordinator, above: glass)

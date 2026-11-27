@@ -163,6 +163,12 @@ extension MapView {
         /// two is ever on screen.
         weak var refusedTrackingButton: UIButton?
         #endif
+        #if os(iOS)
+        /// Which edge the pill is held against: the safe area's, or the map's
+        /// own where the system keeps a column for it beyond the safe area.
+        /// See `MapTrailingBarColumn.swift`.
+        var trackingPillPlacement: TrackingPillPlacement?
+        #endif
 
         // MARK: 2D button
         // Stored state for `MapCoordinator+FlattenButton.swift`, which owns
@@ -200,7 +206,9 @@ extension MapView {
         /// limit without touching the map's height. The bottom inset and the
         /// side panel's are part of it because beside a panel the row rests on
         /// the bottom safe area rather than on a sheet, and the room for
-        /// MapKit's own credit because there it rests on that.
+        /// MapKit's own credit because there it rests on that. And the column
+        /// the system keeps beyond the safe area, because the pill stands in
+        /// it and stops under its top.
         var lastAppliedGeometry: RowGeometry?
 
         // MARK: Side panel
