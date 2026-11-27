@@ -40,6 +40,15 @@
             ]
           }
         },
+        "hr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Koliko je danas prepješačeno u aplikaciji ${applicationName}",
+              "Moja današnja udaljenost u aplikaciji ${applicationName}"
+            ]
+          }
+        },
         "it" : {
           "stringSet" : {
             "state" : "translated",
@@ -135,6 +144,15 @@
             "values" : [
               "Quelle distance ai-je parcourue dans ${applicationName}",
               "Où en est ma randonnée dans ${applicationName}"
+            ]
+          }
+        },
+        "hr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Koliko je dosad prijeđeno u aplikaciji ${applicationName}",
+              "Kako napreduje moja tura u aplikaciji ${applicationName}"
             ]
           }
         },
@@ -237,6 +255,16 @@
               "Combien de temps a duré ma randonnée dans ${applicationName}",
               "Quelle distance faisait ma randonnée dans ${applicationName}",
               "Résume une randonnée dans ${applicationName}"
+            ]
+          }
+        },
+        "hr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Koliko je trajala moja tura u aplikaciji ${applicationName}",
+              "Koliko je bila duga moja tura u aplikaciji ${applicationName}",
+              "Sažmi turu u aplikaciji ${applicationName}"
             ]
           }
         },
@@ -349,6 +377,17 @@
             ]
           }
         },
+        "hr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Otvori turu u aplikaciji ${applicationName}",
+              "Prikaži turu u aplikaciji ${applicationName}",
+              "Otvori ${hike} u aplikaciji ${applicationName}",
+              "Pokaži mi ${hike} u aplikaciji ${applicationName}"
+            ]
+          }
+        },
         "it" : {
           "stringSet" : {
             "state" : "translated",
@@ -456,6 +495,15 @@
             ]
           }
         },
+        "hr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Pauziraj moju turu u aplikaciji ${applicationName}",
+              "Pauziraj snimanje u aplikaciji ${applicationName}"
+            ]
+          }
+        },
         "it" : {
           "stringSet" : {
             "state" : "translated",
@@ -552,6 +600,16 @@
               "Enregistre le long d’un sentier dans ${applicationName}",
               "Lance l’enregistrement le long de ${hike} dans ${applicationName}",
               "Parcours ${hike} avec ${applicationName}"
+            ]
+          }
+        },
+        "hr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Snimaj uz stazu u aplikaciji ${applicationName}",
+              "Počni snimati uz ${hike} u aplikaciji ${applicationName}",
+              "Prođi ${hike} s aplikacijom ${applicationName}"
             ]
           }
         },
@@ -656,6 +714,15 @@
             ]
           }
         },
+        "hr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Nastavi moju turu u aplikaciji ${applicationName}",
+              "Nastavi snimanje u aplikaciji ${applicationName}"
+            ]
+          }
+        },
         "it" : {
           "stringSet" : {
             "state" : "translated",
@@ -752,6 +819,16 @@
               "Démarre une randonnée dans ${applicationName}",
               "Lance l’enregistrement d’une randonnée dans ${applicationName}",
               "Enregistre une randonnée avec ${applicationName}"
+            ]
+          }
+        },
+        "hr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Započni turu u aplikaciji ${applicationName}",
+              "Počni snimati turu u aplikaciji ${applicationName}",
+              "Snimi turu s aplikacijom ${applicationName}"
             ]
           }
         },
@@ -860,6 +937,16 @@
             ]
           }
         },
+        "hr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Zaustavi moju turu u aplikaciji ${applicationName}",
+              "Završi moju turu u aplikaciji ${applicationName}",
+              "Spremi moju turu u aplikaciji ${applicationName}"
+            ]
+          }
+        },
         "it" : {
           "stringSet" : {
             "state" : "translated",
@@ -958,6 +1045,15 @@
             "values" : [
               "Quelle était ma dernière randonnée dans ${applicationName}",
               "Affiche ma dernière randonnée dans ${applicationName}"
+            ]
+          }
+        },
+        "hr" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Koja je bila moja zadnja tura u aplikaciji ${applicationName}",
+              "Prikaži moju zadnju turu u aplikaciji ${applicationName}"
             ]
           }
         },

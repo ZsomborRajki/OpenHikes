@@ -55,6 +55,12 @@
             "value" : "OpenHikes lit votre fréquence cardiaque dans Santé pendant que vous enregistrez une randonnée, pour que la montre puisse l’afficher pendant que vous marchez. Rien d’autre n’est lu dans Santé."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes čita vaš puls iz Zdravlja dok snimate turu kako bi ga sat mogao prikazivati dok hodate. Ništa se drugo iz Zdravlja ne čita."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -119,6 +125,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes démarre un entraînement de randonnée dans Santé pendant que vous enregistrez sur votre montre : c’est ce qui maintient l’enregistrement actif écran éteint. L’entraînement lui-même n’est pas sauvegardé – c’est votre iPhone qui sauvegarde la randonnée terminée."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes pokreće trening planinarenja u Zdravlju dok snimate na satu, što održava snimanje aktivnim s isključenim zaslonom. Sam se trening ne sprema – vaš iPhone sprema završenu turu."
           }
         },
         "it" : {
@@ -187,6 +199,12 @@
             "value" : "OpenHikes utilise votre position pour indiquer où vous êtes sur le sentier que vous suivez, et pour enregistrer votre randonnée."
           }
         },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes koristi vašu lokaciju kako bi prikazao gdje ste na stazi koju pratite i kako bi snimio vašu turu."
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
@@ -251,6 +269,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenHikes utilise les capteurs de mouvement pour améliorer l’altitude enregistrée pendant votre randonnée."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenHikes koristi senzore pokreta kako bi poboljšao visinu zabilježenu na vašoj turi."
           }
         },
         "it" : {
