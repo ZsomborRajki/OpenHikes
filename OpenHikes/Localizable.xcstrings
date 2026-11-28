@@ -32553,6 +32553,70 @@
         }
       }
     },
+    "Highlights" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Highlights"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datos importantes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Points clés"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Evidencija"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dati in evidenza"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoogtepunten"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przegląd"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilanțuri"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подборки"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Основні показники"
+          }
+        }
+      }
+    },
     "Hike" : {
       "localizations" : {
         "de" : {
@@ -71112,6 +71176,198 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Привʼязано до стежки · %@"
+          }
+        }
+      }
+    },
+    "So far this year, you haven’t hiked as far as by this day last year." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bisher bist du dieses Jahr nicht so weit gewandert wie bis zu diesem Tag im letzten Jahr."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En lo que va de año, has recorrido menos distancia que hasta este día del año pasado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Depuis le début de l’année, vous avez parcouru moins de distance qu’à la même date l’année dernière."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ove ste godine dosad prepješačili manje nego do ovog dana prošle godine."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finora quest’anno hai percorso meno distanza rispetto allo stesso periodo dell’anno scorso."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tot nu toe heb je dit jaar minder ver gewandeld dan tot deze dag vorig jaar."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Twój tegoroczny dystans jest jak dotąd mniejszy niż do tego dnia w zeszłym roku."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Până acum, anul acesta ați parcurs o distanță mai mică decât până în această zi a anului trecut."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "С начала года вы прошли меньше, чем к этому дню в прошлом году."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Від початку року ви пройшли менше, ніж до цього дня торік."
+          }
+        }
+      }
+    },
+    "So far this year, you’ve hiked about as far as by this day last year." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bisher bist du dieses Jahr etwa so weit gewandert wie bis zu diesem Tag im letzten Jahr."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En lo que va de año, has recorrido más o menos la misma distancia que hasta este día del año pasado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Depuis le début de l’année, vous avez parcouru à peu près la même distance qu’à la même date l’année dernière."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ove ste godine dosad prepješačili otprilike jednako kao do ovog dana prošle godine."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finora quest’anno hai percorso più o meno la stessa distanza dello stesso periodo dell’anno scorso."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tot nu toe heb je dit jaar ongeveer even ver gewandeld als tot deze dag vorig jaar."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Twój tegoroczny dystans jest jak dotąd mniej więcej taki sam jak do tego dnia w zeszłym roku."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Până acum, anul acesta ați parcurs aproximativ aceeași distanță ca până în această zi a anului trecut."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "С начала года вы прошли примерно столько же, сколько к этому дню в прошлом году."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Від початку року ви пройшли приблизно стільки ж, скільки до цього дня торік."
+          }
+        }
+      }
+    },
+    "So far this year, you’ve hiked farther than by this day last year." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bisher bist du dieses Jahr weiter gewandert als bis zu diesem Tag im letzten Jahr."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En lo que va de año, has recorrido más distancia que hasta este día del año pasado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Depuis le début de l’année, vous avez parcouru plus de distance qu’à la même date l’année dernière."
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ove ste godine dosad prepješačili više nego do ovog dana prošle godine."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finora quest’anno hai percorso più distanza rispetto allo stesso periodo dell’anno scorso."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tot nu toe heb je dit jaar verder gewandeld dan tot deze dag vorig jaar."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Twój tegoroczny dystans jest jak dotąd większy niż do tego dnia w zeszłym roku."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Până acum, anul acesta ați parcurs o distanță mai mare decât până în această zi a anului trecut."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "С начала года вы прошли больше, чем к этому дню в прошлом году."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Від початку року ви пройшли більше, ніж до цього дня торік."
           }
         }
       }

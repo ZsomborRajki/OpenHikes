@@ -284,6 +284,14 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
     let calendar: Calendar
     let thisYear: Figures
     let lastYear: Figures
+    /// Last year as far as it had got by this day: what this year so far is
+    /// fairly held against, where the whole of ``lastYear`` is eleven months
+    /// ahead of a year one month old.
+    ///
+    /// "This day" is the calendar's: one year back from the moment the
+    /// figures are summed at, so Elul is held against Elul whether or not
+    /// either year had an Adar I. Never outside last year.
+    let lastYearByNow: Figures
     let allTime: Figures
     /// Distance by month, in the calendar's order: every month the year has,
     /// whether or not anything was walked in it — see the file header.
@@ -318,6 +326,9 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         previousYear = calendar.component(.year, from: previous.start)
         thisYear = Figures(currentOutings)
         lastYear = Figures(previousOutings)
+        let yearAgo = calendar.date(byAdding: .year, value: -1, to: date) ?? previous.end
+        let byNow = min(max(yearAgo, previous.start), previous.end)
+        lastYearByNow = Figures(previousOutings.filter { $0.date <= byNow })
         allTime = Figures(outings)
         monthsThisYear = Self.months(of: currentOutings, in: span, calendar: calendar)
         monthsLastYear = Self.months(of: previousOutings, in: previous, calendar: calendar)

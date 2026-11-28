@@ -17,7 +17,8 @@
 //  in Fitness: cards, each a measurement with its figure in rounded numerals
 //  — see `TotalsCard.swift` for the pieces, ``TotalsDistanceCard`` for the
 //  year's distance and its months, ``TotalsYearTiles`` for the year's other
-//  figures and `TotalsRowCards.swift` for everything walked and the records.
+//  figures, ``TotalsHighlightCard`` for the year against last year, and
+//  `TotalsRowCards.swift` for everything walked and the records.
 //
 
 import OpenHikesData
@@ -125,8 +126,9 @@ struct LibraryTotalsView: View {
 /// is the only thing the screen's own body decides.
 ///
 /// The year first: its distance over the months, then its other four
-/// measurements a tile each. Everything walked in all and the records
-/// follow, and what counts is said at the foot.
+/// measurements a tile each, then how it stands against last year by this
+/// day. Everything walked in all and the records follow, and what counts
+/// is said at the foot.
 private struct LibraryTotalsContent: View {
     private static let footnoteSpacing: CGFloat = 8
 
@@ -138,6 +140,15 @@ private struct LibraryTotalsContent: View {
             section(Text(verbatim: totals.yearName), isProminent: true) {
                 TotalsDistanceCard(totals: totals)
                 TotalsYearTiles(totals: totals)
+            }
+            if let highlight = TotalsDistanceHighlight(totals: totals) {
+                section(Text("Highlights")) {
+                    TotalsHighlightCard(
+                        highlight: highlight,
+                        yearName: totals.yearName,
+                        previousYearName: totals.previousYearName
+                    )
+                }
             }
             section(Text("All Time")) {
                 TotalsAllTimeCard(figures: totals.allTime)

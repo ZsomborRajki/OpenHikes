@@ -278,15 +278,18 @@
 # words, the chance of rain, the UV scale and "feels like" are
 # `WeatherReadingFormat`'s and `WeatherConditions`' (`WeatherPanelFiguresTests`).
 #
-# Four arrived when *Totals* was redrawn as cards: the card, its headings and
+# Five arrived when *Totals* was redrawn as cards: the card, its headings and
 # the figure in two sizes (`TotalsCard`), the year's distance over its month
-# chart (`TotalsDistanceCard`), the year's four tiles (`TotalsTiles`), and the
-# rows of everything walked and of the records (`TotalsRowCards`), all body
-# code. What they draw stays measured: the sums are `LibraryTotals`', the
-# spelling of a figure is `TotalsFormat`'s (`LibraryTotalsUnitTests`), where
-# its number ends and its unit begins is `TotalsFigureRuns`'
-# (`TotalsFigureRunsTests`), and what stands over the chart, with a finger on
-# it or without, is `TotalsDistanceReadout`'s (`TotalsDistanceReadoutTests`).
+# chart (`TotalsDistanceCard`), the year's four tiles (`TotalsTiles`), the
+# year against last year in a sentence and two bars (`TotalsHighlightCard`),
+# and the rows of everything walked and of the records (`TotalsRowCards`),
+# all body code. What they draw stays measured: the sums are
+# `LibraryTotals`', the spelling of a figure is `TotalsFormat`'s
+# (`LibraryTotalsUnitTests`), where its number ends and its unit begins is
+# `TotalsFigureRuns`' (`TotalsFigureRunsTests`), what stands over the chart,
+# with a finger on it or without, is `TotalsDistanceReadout`'s
+# (`TotalsDistanceReadoutTests`), and what the sentence claims is
+# `TotalsDistanceHighlight`'s (`TotalsDistanceHighlightTests`).
 # `LibraryTotalsView`, the screen itself, was never listed and is not now:
 # it reads the library and opens a record's hike.
 #
@@ -425,3 +428,4 @@ OpenHikes/Hikes/Library/Totals/TotalsCard.swift
 OpenHikes/Hikes/Library/Totals/TotalsDistanceCard.swift
 OpenHikes/Hikes/Library/Totals/TotalsTiles.swift
 OpenHikes/Hikes/Library/Totals/TotalsRowCards.swift
+OpenHikes/Hikes/Library/Totals/TotalsHighlightCard.swift
