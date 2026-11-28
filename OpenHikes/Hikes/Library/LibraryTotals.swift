@@ -359,6 +359,20 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         }
     }
 
+    /// What the screen calls this year, wherever it names it: its heading,
+    /// the figures over the chart, a bar read aloud.
+    ///
+    /// The calendar's own number for the year, and the one spelling of it.
+    /// A date style is not a second: asked for a month with its year,
+    /// Foundation writes a Chinese year 43 as "Mo11 2026", the Gregorian
+    /// year it falls in, and the figure named "43" a moment before read as
+    /// another year's under a finger. So nothing on the screen formats a
+    /// year, and a month is named without one (``name(of:width:locale:)``).
+    var yearName: String { String(year) }
+
+    /// Last year, by the rule ``yearName`` follows.
+    var previousYearName: String { String(previousYear) }
+
     /// Whether anything was walked last year. A hiker in their first year
     /// has no last year to be held against, and the screen draws none: no
     /// empty bars beside this year's, and no figure of nothing.
@@ -369,13 +383,6 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
     /// month with its Gregorian name or change calendars after a sum.
     func name(of month: MonthDistance, width: Date.FormatStyle.Symbol.Month, locale: Locale) -> String {
         Self.middle(of: month).formatted(dateStyle(in: locale).month(width))
-    }
-
-    /// The month with its year, "Mar 2026", which is what the chart's
-    /// readout says of the bar under the finger: the two years' bars stand
-    /// side by side, and each figure names its own.
-    func nameWithYear(of month: MonthDistance, locale: Locale) -> String {
-        Self.middle(of: month).formatted(dateStyle(in: locale).month(.abbreviated).year())
     }
 
     private func dateStyle(in locale: Locale) -> Date.FormatStyle {

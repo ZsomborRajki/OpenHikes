@@ -135,7 +135,7 @@ private struct LibraryTotalsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: TotalsMetrics.sectionSpacing) {
-            section(Text(verbatim: String(totals.year)), isProminent: true) {
+            section(Text(verbatim: totals.yearName), isProminent: true) {
                 TotalsDistanceCard(totals: totals)
                 TotalsYearTiles(totals: totals)
             }

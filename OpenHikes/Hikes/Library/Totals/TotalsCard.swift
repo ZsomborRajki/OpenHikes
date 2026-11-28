@@ -76,6 +76,10 @@ struct TotalsSectionHeading: View {
 struct TotalsCardHeading: View {
     let title: LocalizedStringKey
     let systemImage: String
+    /// What the card is about just now, after the title: the month under a
+    /// finger on the chart. Words some other type has already resolved, so
+    /// they are drawn as they are.
+    var detail: String?
 
     /// The box every glyph is drawn in. Symbols differ in height, and a
     /// heading as tall as its own glyph put a tile's figure a point higher
@@ -88,7 +92,7 @@ struct TotalsCardHeading: View {
                 .foregroundStyle(.tint)
                 .frame(width: glyphSize, height: glyphSize)
                 .accessibilityHidden(true)
-            Text(title)
+            words
                 .textCase(.uppercase)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -98,8 +102,16 @@ struct TotalsCardHeading: View {
         // Spoken from the name, not from the small capitals drawn, which
         // VoiceOver would spell out.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
+        .accessibilityLabel(words)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// The title, and the detail after it where there is one. The title is
+    /// a key and the detail is not, so they are two texts side by side on
+    /// one line, not one sentence put together.
+    private var words: Text {
+        guard let detail else { return Text(title) }
+        return Text("\(Text(title)) · \(Text(verbatim: detail))")
     }
 }
 
