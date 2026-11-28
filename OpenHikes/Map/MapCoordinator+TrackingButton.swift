@@ -307,6 +307,39 @@ extension MapView.Coordinator {
         #endif
     }
 
+    /// Points the weather badge at the hiker when the map turns to follow
+    /// them — see ``WeatherFocus/focusOnHiker(at:)``.
+    ///
+    /// The map moving to a searched place moves the badge there, and this is
+    /// the same rule for the place the hiker is standing: a map that has just
+    /// been asked to show *here* is a hiker asking about here. Every turn to
+    /// a following mode counts, the second press that adds the heading
+    /// included, and so does a recording's screen asking for the follow: the
+    /// badge is the hiker's by then, and the ask is held to a floor.
+    ///
+    /// The position is MapKit's own, the one its dot is drawn at, so the
+    /// badge is about the place the map shows the hiker standing.
+    ///
+    /// **A map that does not know where the hiker is yet owes the badge
+    /// their position.** A press in the first seconds of a launch lands
+    /// before MapKit has one, and that launch is the one whose badge has
+    /// nothing current to draw. ``settleWeatherFocus(hikerAt:)`` pays it at
+    /// the first position, unless a pan has ended the follow by then.
+    func focusWeather(following mode: MKUserTrackingMode, hikerAt coordinate: CLLocationCoordinate2D?) {
+        owesWeatherTheHiker = mode != .none && coordinate == nil
+        guard mode != .none, let coordinate else { return }
+        weatherFocus?.focusOnHiker(at: coordinate)
+    }
+
+    /// The hiker's position reached a map that turned to follow them before
+    /// it had one. Asked at every position MapKit reports, and almost always
+    /// owed nothing.
+    func settleWeatherFocus(hikerAt coordinate: CLLocationCoordinate2D?) {
+        guard owesWeatherTheHiker, let coordinate else { return }
+        owesWeatherTheHiker = false
+        weatherFocus?.focusOnHiker(at: coordinate)
+    }
+
     /// Full opacity until the sheet reaches the button, then linearly to
     /// nothing across the rest of the sheet's travel.
     static func trackingButtonAlpha(
@@ -340,9 +373,12 @@ extension MapView.Coordinator {
 
     /// Tracking turning on or off is the only thing that changes the glyph's
     /// colour, and MapKit reports it here whether the button or the app asked
-    /// for it — a pan that drops out of `.follow` included.
+    /// for it — a pan that drops out of `.follow` included. It is also the
+    /// one place a press of MapKit's button can be heard: the button is not a
+    /// control, and its tap goes straight to the map.
     func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
         applyTrackingTint(for: mode)
+        focusWeather(following: mode, hikerAt: mapView.userLocation.location?.coordinate)
     }
 
     /// Keeps the capsule showing the button that can actually do something.

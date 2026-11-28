@@ -140,6 +140,44 @@ struct WeatherRequestStateTests {
         #expect(!byFocus, "re-focusing a subject whose reading is still fresh spends nothing")
     }
 
+    /// A hiker who presses the location button is looking at the badge for
+    /// the answer, and a reading a focus still calls fresh is minutes old to
+    /// them. So the press is held to the floor a movement is, which is also
+    /// what keeps a button pressed over and over from being a request each.
+    @Test("asking where they are refreshes on the short floor, not the freshness one")
+    func askingUsesTheShortFloor() {
+        var state = WeatherRequestState()
+        state.recordSuccess(key: "me", at: start)
+
+        let tooSoon = state.shouldRequest(
+            key: "me", reason: .asked, at: start.addingTimeInterval(59), policy: policy
+        )
+        #expect(!tooSoon, "a second press within the minute spends nothing")
+        let allowed = state.shouldRequest(
+            key: "me", reason: .asked, at: start.addingTimeInterval(60), policy: policy
+        )
+        #expect(allowed)
+        let byFocus = state.shouldRequest(
+            key: "me", reason: .focus, at: start.addingTimeInterval(60), policy: policy
+        )
+        #expect(!byFocus, "the same moment is not enough for a focus")
+    }
+
+    @Test("asking where they are does not bypass a failure's backoff")
+    func askingHonorsBackoff() {
+        var state = WeatherRequestState()
+        state.recordFailure(key: "me", at: start, policy: policy)
+
+        let duringBackoff = state.shouldRequest(
+            key: "me", reason: .asked, at: start.addingTimeInterval(4), policy: policy
+        )
+        #expect(!duringBackoff)
+        let afterBackoff = state.shouldRequest(
+            key: "me", reason: .asked, at: start.addingTimeInterval(5), policy: policy
+        )
+        #expect(afterBackoff)
+    }
+
     /// Freshness is per subject, which is what lets the badge move between
     /// them without paying for each move. Selecting a trail, searching a city
     /// and going back to the trail is three focuses and two requests.

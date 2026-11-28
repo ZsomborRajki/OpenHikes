@@ -12,29 +12,45 @@
 //  The loop used to be about the hiker's position, waking on every accepted
 //  fix and rounding it onto a grid to decide whether that position was news.
 //  It is now about ``WeatherFocus/subject`` — see ``WeatherSubject`` for why —
-//  and wakes on four things:
+//  and wakes on six things:
 //
-//  - the subject changed, because a recording started, a hike was selected or
-//    a search resolved;
+//  - the subject changed, because a recording started, a hike was selected, a
+//    search resolved or the map turned to follow the hiker;
+//  - the hiker asked where they are, at the map's location button, which is
+//    heard on its own because it often changes nothing: the subject is
+//    already the hiker, standing where they stood;
 //  - the hiker moved appreciably, via significant-change delivery, and the
 //    subject is one that follows them;
+//  - the launch got its first fix, which is the same news from the feed the
+//    map already runs — see *A launch* below;
 //  - the reading for the current subject came due, which is one sleep to an
 //    exact deadline re-armed after each pass rather than a tick;
 //  - a walk or a recording started or ended, which asks for nothing and only
 //    re-reads the badge for a severe-weather alert that has just become the
 //    hiker's — see ``WeatherAlertSession``.
 //
-//  Which of the first three it was is carried into ``WeatherRequestState`` as
+//  Which of the first five it was is carried into ``WeatherRequestState`` as
 //  a ``WeatherRequestReason``, because they do not deserve the same answer: a
-//  search the user just typed is owed a request now, and a cell handoff is
-//  not.
+//  search the user just typed is owed a request now, a hiker who asks where
+//  they are is owed a reading newer than one that is merely not old yet, and
+//  a cell handoff is owed neither.
+//
+//  **A launch.** Nothing has focused when the loop starts, unless a selection
+//  was restored: the reading on the badge is the stored one
+//  (``WeatherManager/restoreLastReading()``), with no subject behind it. The
+//  loop leaves it there, and the first fix of the foreground feed makes the
+//  hiker the subject, as a movement would. Significant-change delivery was
+//  once the only thing that could, and it is not enough: it hands over what
+//  the system last knew as it starts, which is refused when it is more than
+//  a few minutes old, and then says nothing more to a hiker who stays where
+//  they are. That launch drew no weather at all, and cleared the widget's.
 //
 //  **A request runs beside the loop, not in it.** Awaited in place, a
 //  forecast that stalled for one trail held the loop there: opening another
 //  trail could not move the badge, not even to a reading already cached for
 //  it, and when the first answer finally landed it went on the badge over
 //  the trail the hiker was looking at. So each request is a task of its
-//  own, one per subject, whose answer comes back to the loop as a fifth
+//  own, one per subject, whose answer comes back to the loop as a seventh
 //  wake to be counted against that subject's freshness or backoff — and
 //  ``WeatherManager/update(for:inFront:)`` shows it only if its subject is
 //  still the one in front.
@@ -57,7 +73,12 @@ import Foundation
 private enum WeatherWake: Sendable {
     /// A request the loop sent came back — see this file's header.
     case answered(WeatherAnswer)
+    /// The hiker asked where they are — see ``WeatherFocus/focusOnHiker(at:)``,
+    /// which has moved the subject already.
+    case asked
     case expiry
+    /// The foreground feed's first fix of the launch — see this file's header.
+    case firstFix
     case focus
     case movement
     case session
@@ -101,15 +122,21 @@ extension OpenHikesModel {
 
         // Nested because `merge` takes at most three. The session is
         // de-duplicated because `isActive` reads the recorder's phase, and a
-        // pause or a resume is not a session starting.
+        // pause or a resume is not a session starting. An ask that moved the
+        // subject wakes the loop twice, in either order, and the second pass
+        // finds the request the first one sent already out.
         let wakes = merge(
             weatherFocus.subjects.map { _ in WeatherWake.focus },
             merge(
                 significantLocations.movements.map { _ in WeatherWake.movement },
+                // Once false and once true: `hasFix` is written at the first
+                // fix and never again.
+                observedValues { self.locationManager.hasFix }.map { _ in WeatherWake.firstFix },
                 answers.map { WeatherWake.answered($0) }
             ),
             merge(
                 dueDates.map { _ in WeatherWake.expiry },
+                weatherFocus.asks().map { _ in WeatherWake.asked },
                 observedValues { self.weatherAlertSession }
                     .removeDuplicates()
                     .map { _ in WeatherWake.session }
@@ -142,10 +169,10 @@ extension OpenHikesModel {
                 // Ignore movements that leave a searched place or distant
                 // trail unchanged; those readings still wait for their
                 // freshness deadline.
-                if case .movement = wake, !subjectFollowedTheHiker() { continue }
+                if wake.isHikerPosition, !subjectFollowedTheHiker(as: wake) { continue }
 
                 guard let subject = weatherFocus.subject else {
-                    weatherManager.focus(on: nil, willRequest: false)
+                    clearBadgeIfRecordingDroppedItsSubject()
                     dueTask?.cancel()
                     continue
                 }
@@ -176,12 +203,31 @@ extension OpenHikesModel {
         }
     }
 
-    /// Whether a movement moved the subject: the hiker went far enough, and
-    /// the subject is one that follows them — see
+    /// Whether the hiker's position moved the subject: they went far enough,
+    /// and the subject is one that follows them — see
     /// ``WeatherFocus/hikerMoved(to:)``.
-    private func subjectFollowedTheHiker() -> Bool {
-        guard let coordinate = significantLocations.coordinate else { return false }
-        return weatherFocus.hikerMoved(to: coordinate)
+    ///
+    /// The position is the one `wake` is news of: the first fix is the
+    /// foreground feed's, and a movement is significant-change delivery's.
+    /// Each feed's stream says first that it has no position yet, which
+    /// moves nothing.
+    private func subjectFollowedTheHiker(as wake: WeatherWake) -> Bool {
+        let position = if case .firstFix = wake { locationManager.coordinate } else { significantLocations.coordinate }
+        guard let position else { return false }
+        return weatherFocus.hikerMoved(to: position)
+    }
+
+    /// The badge with no subject to be about.
+    ///
+    /// Two things leave the focus empty, and they are opposites. A recording
+    /// that began before any fix has dropped the place the badge was about —
+    /// see ``WeatherFocus/pinToHiker(at:)`` — and the badge must stop drawing
+    /// it. A launch nobody has focused yet has dropped nothing: the badge is
+    /// drawing the stored reading, and clearing it would take the weather
+    /// off the screen and off the widget until the hiker's first fix.
+    private func clearBadgeIfRecordingDroppedItsSubject() {
+        guard weatherFocus.isPinnedToHiker else { return }
+        weatherManager.focus(on: nil, willRequest: false)
     }
 
     /// A request about `subject`, for the loop to run beside it rather than
@@ -249,12 +295,22 @@ extension OpenHikesModel {
 }
 
 private extension WeatherWake {
+    /// Whether this is news of where the hiker is.
+    var isHikerPosition: Bool {
+        switch self {
+        case .firstFix, .movement: true
+        case .answered, .asked, .expiry, .focus, .session: false
+        }
+    }
+
     /// `nil` for a wake that is not a reason to ask WeatherKit anything.
     var requestReason: WeatherRequestReason? {
         switch self {
+        case .asked: .asked
         case .expiry: .expiry
         case .focus: .focus
-        case .movement: .movement
+        // The first fix is a movement from nowhere.
+        case .firstFix, .movement: .movement
         case .answered, .session: nil
         }
     }

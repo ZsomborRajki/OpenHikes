@@ -329,6 +329,7 @@ struct OpenHikesView: View {
             junctionGuide: appModel.junctionGuide,
             countryOutlines: appModel.offlineCountries.outlines,
             routeTrim: appModel.routeTrim,
+            weatherFocus: appModel.weatherFocus,
             // Keeps the credit line and the camera pill beside the landscape
             // panel instead of behind it.
             sidePanelInset: usesSidePanel ? MapSidePanelLayout.mapInset : 0,

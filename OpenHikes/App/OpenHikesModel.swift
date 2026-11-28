@@ -302,11 +302,11 @@ final class OpenHikesModel {
         self.locationManager = locationManager
         self.weatherManager = weatherManager
         self.significantLocations = significantLocations
-        // Seeded from whatever the manager restored, so a launch that comes
-        // back with last night's reading is also pointed at the place that
-        // reading was for — otherwise the badge would show a subject the poll
-        // loop has never heard of and would not refresh until the user did
-        // something. A restored subject is replaced by the first real focus.
+        // Whatever a manager handed in is already showing. A launch's own is
+        // showing nothing yet: the stored reading goes back on the badge
+        // after the first frame, with no subject here behind it, and stays
+        // until a selection, a search or the hiker's first fix gives the
+        // poll one — see *A launch* in `OpenHikesModel+Weather.swift`.
         weatherFocus = WeatherFocus(subject: weatherManager.state.subject)
         self.trailGraphProvider = trailGraphProvider
         self.defaults = defaults

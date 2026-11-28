@@ -4,12 +4,12 @@
 //
 //  Who owns the weather badge.
 //
-//  Three call sites can point it somewhere — the recorder, hike selection and
-//  search — and the rule between them is not obvious enough to be left to the
-//  call sites: an active recording owns the subject outright, so a search made
-//  mid-hike moves the map and leaves the badge alone. That rule is the whole
-//  reason ``WeatherFocus`` is a type rather than a property, and it is what
-//  these assert.
+//  Four call sites can point it somewhere — the recorder, hike selection,
+//  search and the map's location button — and the rule between them is not
+//  obvious enough to be left to the call sites: an active recording owns the
+//  subject outright, so a search made mid-hike moves the map and leaves the
+//  badge alone. That rule is the whole reason ``WeatherFocus`` is a type
+//  rather than a property, and it is what these assert.
 //
 
 import CoreLocation
@@ -192,6 +192,79 @@ struct WeatherFocusTests {
         focus.defaultToHiker(at: budapest)
 
         #expect(focus.subject == .place(vienna, name: "Vienna"))
+    }
+
+    /// The map going to a searched city moved the badge there. The map going
+    /// back to where the hiker stands has to move it back, or the badge is
+    /// left on a city the map is no longer showing.
+    @Test("asking where they are takes the badge from a searched place")
+    func askingTakesTheBadgeFromASearch() {
+        let focus = WeatherFocus()
+        focus.focus(on: .place(vienna, name: "Vienna"))
+
+        focus.focusOnHiker(at: budapest)
+
+        #expect(focus.subject == .me(budapest))
+    }
+
+    @Test("asking where they are takes the badge from a trail they are nowhere near")
+    func askingTakesTheBadgeFromADistantTrail() {
+        let focus = WeatherFocus()
+        focus.focus(on: trail(at: vienna))
+
+        focus.focusOnHiker(at: budapest)
+
+        #expect(focus.subject == .me(budapest))
+    }
+
+    /// The trail a hiker is out on follows them already, and is the same
+    /// weather as here. Taking the badge from it would cost its reading and
+    /// its name on the sheet for nothing.
+    @Test("asking where they are keeps the trail they are out on, where they stand")
+    func askingKeepsTheTrailTheyAreOn() {
+        let focus = WeatherFocus()
+        let selected = trail(at: budapest)
+        focus.focus(on: selected)
+
+        focus.focusOnHiker(at: nearBudapest)
+
+        #expect(focus.subject == selected.moved(to: nearBudapest))
+    }
+
+    @Test("asking where they are makes the hiker the subject when nothing else is")
+    func askingFocusesAnEmptyBadge() {
+        let focus = WeatherFocus()
+        focus.focusOnHiker(at: budapest)
+        #expect(focus.subject == .me(budapest))
+    }
+
+    @Test("asking where they are during a recording brings the hiker's position up to date")
+    func askingUnderAPinStaysTheHiker() {
+        let focus = WeatherFocus()
+        focus.pinToHiker(at: budapest)
+
+        focus.focusOnHiker(at: nearBudapest)
+
+        #expect(focus.subject == .me(nearBudapest))
+        #expect(focus.isPinnedToHiker)
+    }
+
+    /// The press that matters most changes nothing: the badge is about the
+    /// hiker already, standing where they stood, and its reading is a few
+    /// minutes old. `subjects` is silent then, so the ask has a stream of
+    /// its own for the poll to wake on.
+    @Test("asking where they are is heard when it changes nothing", .timeLimit(.minutes(1)))
+    func anAskThatChangesNothingIsHeard() async {
+        let focus = WeatherFocus()
+        focus.focusOnHiker(at: budapest)
+        var asks = focus.asks().makeAsyncIterator()
+
+        focus.focusOnHiker(at: budapest)
+
+        // Sent before this is awaited, so it is already in the stream. A
+        // press that was not heard hangs here, and the time limit says so.
+        await asks.next()
+        #expect(focus.subject == .me(budapest))
     }
 
     /// The poll loop wakes on every change to `subject`, so re-focusing what

@@ -399,6 +399,12 @@ extension MapView {
         /// ``community`` is: the coordinator outlives nothing and owns
         /// nothing.
         weak var searchCompleter: SearchCompleter?
+        /// Told when the map turns to follow the hiker, and weak for that
+        /// reason too — see `MapCoordinator+TrackingButton.swift`.
+        weak var weatherFocus: WeatherFocus?
+        /// Whether the map turned to follow the hiker before it knew where
+        /// they are, and still owes ``weatherFocus`` their position.
+        var owesWeatherTheHiker = false
 
         var communityAnnotations: [CommunityMapAnnotation] = []
         /// The markers standing where the *open preview's* photographs were
@@ -846,6 +852,7 @@ extension MapView.Coordinator {
         // alone doesn't reliably suppress the callout.
         mapView.view(for: userLocation)?.canShowCallout = false
         updateHighlightOpacity(on: mapView)
+        settleWeatherFocus(hikerAt: userLocation.location?.coordinate)
     }
 
     func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {

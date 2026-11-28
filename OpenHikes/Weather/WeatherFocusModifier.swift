@@ -28,7 +28,9 @@
 //
 //  The third edge — search — is not here because it is not a change handler:
 //  `MapSheet` sets the subject in the same breath as it zooms the map, which
-//  is the moment it belongs to.
+//  is the moment it belongs to. Nor is the fourth, the map's location button,
+//  for the same reason: the map hears itself turn to follow the hiker, in
+//  `MapCoordinator+TrackingButton.swift`.
 //
 //  The precedence between the two is not here either. `WeatherFocus` decides
 //  what a search may do while a recording is running; a call site that decided
