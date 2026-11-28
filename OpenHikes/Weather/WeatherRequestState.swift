@@ -44,6 +44,10 @@ nonisolated struct WeatherPollingPolicy: Sendable {
     /// burst of events during a drive, or a receiver flapping between two
     /// cells, cannot turn into a burst of metered requests. A button pressed
     /// over and over is the same burst by hand.
+    ///
+    /// A movement it refuses is not forgotten: the subject comes due when
+    /// the floor runs out — see
+    /// ``WeatherRequestState/shouldRequest(key:reason:at:policy:isAsking:)``.
     let minimumRequestInterval: TimeInterval
     let retryDelays: [TimeInterval]
 
@@ -89,6 +93,11 @@ nonisolated struct WeatherRequestState: Sendable {
         var lastSuccess: Date?
         var failureCount = 0
         var nextAttempt: Date?
+        /// Whether the subject has moved since the last request about it
+        /// was sent: a movement its floor refused, or one that found that
+        /// request still out. The reading held, or on its way, is for where
+        /// the subject was — see ``shouldRequest(key:reason:at:policy:isAsking:)``.
+        var owesMovement = false
     }
 
     /// Ordered least- to most-recently used, which is the whole eviction
@@ -96,17 +105,44 @@ nonisolated struct WeatherRequestState: Sendable {
     /// is always the first.
     private var entries: OrderedDictionary<String, Entry> = [:]
 
+    /// Whether to ask about `key` now. `isAsking` is whether a request about
+    /// it is already out, which is never repeated.
+    ///
+    /// **A movement that has to wait is owed.** Its floor refuses it, or it
+    /// finds a request about where the subject was still out, and either way
+    /// the reading the badge ends up with is for the old position. Left at
+    /// that, it stood until the reading expired: a launch whose first fix
+    /// arrived a moment after significant-change delivery's cached one drew
+    /// the cached position's forecast for a quarter of an hour. So the
+    /// subject comes due at the movement floor instead — see
+    /// ``nextEligibleDate(key:policy:)`` — and is held to that floor whatever
+    /// wakes the poll, until a request about where it is now goes out.
     mutating func shouldRequest(
         key: String,
         reason: WeatherRequestReason,
         at now: Date,
-        policy: WeatherPollingPolicy = .standard
+        policy: WeatherPollingPolicy = .standard,
+        isAsking: Bool = false
     ) -> Bool {
-        let existing = entries[key]
-        touch(key)
+        let willRequest = Self.isDue(entries[key], for: reason, at: now, policy: policy) && !isAsking
+        update(key) { entry in
+            if willRequest {
+                entry.owesMovement = false
+            } else if reason == .movement {
+                entry.owesMovement = true
+            }
+        }
+        return willRequest
+    }
 
+    private static func isDue(
+        _ entry: Entry?,
+        for reason: WeatherRequestReason,
+        at now: Date,
+        policy: WeatherPollingPolicy
+    ) -> Bool {
         // Never asked about this subject: genuinely new ground, so ask.
-        guard let existing else { return true }
+        guard let entry else { return true }
 
         // A failure's backoff is honoured whatever the reason, including a
         // fresh search. When WeatherKit is refusing — a bad entitlement, a
@@ -114,17 +150,19 @@ nonisolated struct WeatherRequestState: Sendable {
         // the ladder exists for, and letting `.focus` or `.asked` past it
         // would turn the search field, or the location button, into a way to
         // hammer a service that has already said no four times.
-        if let nextAttempt = existing.nextAttempt { return now >= nextAttempt }
+        if let nextAttempt = entry.nextAttempt { return now >= nextAttempt }
 
-        guard let lastSuccess = existing.lastSuccess else { return true }
-        return now.timeIntervalSince(lastSuccess) >= Self.minimumInterval(for: reason, policy: policy)
+        guard let lastSuccess = entry.lastSuccess else { return true }
+        return now.timeIntervalSince(lastSuccess) >= Self.minimumInterval(for: reason, of: entry, policy: policy)
     }
 
     private static func minimumInterval(
         for reason: WeatherRequestReason,
+        of entry: Entry,
         policy: WeatherPollingPolicy
     ) -> TimeInterval {
-        switch reason {
+        if entry.owesMovement { return policy.minimumRequestInterval }
+        return switch reason {
         case .focus, .expiry: policy.freshnessInterval
         case .movement, .asked: policy.minimumRequestInterval
         }
@@ -171,6 +209,9 @@ nonisolated struct WeatherRequestState: Sendable {
     /// Deliberately non-mutating: asking when a subject comes due is not the
     /// same as asking about it, and must not reorder the recency list that
     /// decides which subject is forgotten first.
+    ///
+    /// A subject owed a movement comes due at the movement floor rather than
+    /// when its reading expires: that reading is for where it was.
     func nextEligibleDate(
         key: String,
         policy: WeatherPollingPolicy = .standard
@@ -178,11 +219,9 @@ nonisolated struct WeatherRequestState: Sendable {
         guard let entry = entries[key] else { return nil }
         if let nextAttempt = entry.nextAttempt { return nextAttempt }
         guard let lastSuccess = entry.lastSuccess else { return nil }
-        return lastSuccess.addingTimeInterval(policy.freshnessInterval)
-    }
-
-    private mutating func touch(_ key: String) {
-        update(key) { _ in /* no-op: just moves key to most-recently-used position */ }
+        return lastSuccess.addingTimeInterval(
+            entry.owesMovement ? policy.minimumRequestInterval : policy.freshnessInterval
+        )
     }
 
     /// Applies `change` to `key`'s entry and marks it the most recently used,

@@ -55,10 +55,18 @@ nonisolated private final class LaunchWidgetLog: @unchecked Sendable {
     }
 }
 
+private extension WeatherPollingPolicy {
+    /// The standard policy with a movement floor a case can wait out.
+    static let shortFloor = Self(freshnessInterval: 15 * 60, minimumRequestInterval: 1, retryDelays: [5])
+}
+
 @MainActor
 @Suite("Weather poll launch", .timeLimit(.minutes(1)))
 struct WeatherPollLaunchTests {
     private static let lastNightCelsius = 4.0
+    /// Three minutes: inside what significant-change delivery is accepted
+    /// at, and older than any fix the foreground feed accepts.
+    private static let cachedLocationAge: TimeInterval = 180
     /// How many main-actor round trips the loop is given to take its first
     /// passes — see ``letTheLoopStart()``.
     private static let startingRoundTrips = 20
@@ -134,6 +142,26 @@ struct WeatherPollLaunchTests {
         model.locationManager.locationManager(CLLocationManager(), didUpdateLocations: [fix])
     }
 
+    /// What significant-change delivery hands over as it starts: where the
+    /// system last knew the hiker to be, `age` seconds ago.
+    private func deliverCachedLocation(at coordinate: CLLocationCoordinate2D, age: TimeInterval) {
+        let cached = CLLocation(
+            coordinate: coordinate,
+            altitude: 0,
+            horizontalAccuracy: 1000,
+            verticalAccuracy: -1,
+            course: -1,
+            speed: -1,
+            timestamp: Date(timeIntervalSinceNow: -age)
+        )
+        model.significantLocations.locationManager(CLLocationManager(), didUpdateLocations: [cached])
+    }
+
+    /// Whether the badge draws a reading about `subject`.
+    private func isReading(_ subject: WeatherSubject) -> Bool {
+        manager.state.snapshot != nil && manager.state.subject == subject
+    }
+
     /// Hands the loop the main actor until it has taken what each of its
     /// streams says first.
     ///
@@ -200,6 +228,60 @@ struct WeatherPollLaunchTests {
         await settleDelegateHop(until: "the recording's reading is on the badge") {
             manager.state.subject == .me(trailhead) && manager.state.snapshot != nil
         }
+        await end(poll)
+    }
+
+    /// The pin changes what an empty focus means without changing the
+    /// subject, so the loop has to hear the pin itself.
+    @Test("a recording that begins before any fix, with the poll running, takes the old place off the badge")
+    func aRecordingStartedWithNoFixClearsTheBadge() async {
+        _ = restoreLastNight(about: chamonix)
+        let poll = Task { await model.pollWeather() }
+        await letTheLoopStart()
+        #expect(manager.state.subject == chamonix, "precondition: the launch kept the stored reading")
+
+        model.weatherFocus.pinToHiker(at: nil)
+
+        await settleDelegateHop(until: "the badge has stopped drawing the searched place") {
+            manager.state == .idle
+        }
+        await end(poll)
+    }
+
+    /// Significant-change delivery starts with where the system last knew
+    /// the hiker to be, minutes ago, and its request is out or just answered
+    /// when the feed the map runs says where they are now.
+    @Test("the first fix supersedes a cached significant-change location, once the floor lets it ask")
+    func theFirstFixSupersedesACachedLocation() async {
+        let poll = Task { await model.pollWeather(policy: .shortFloor) }
+        await letTheLoopStart()
+        deliverCachedLocation(at: home, age: Self.cachedLocationAge)
+        await settleDelegateHop(until: "the cached location's reading is on the badge") { isReading(.me(home)) }
+
+        deliverFix(at: trailhead)
+
+        await settleDelegateHop(until: "the hiker's own position was asked about") {
+            forecasts.timesAsked(about: trailhead) == 1
+        }
+        #expect(manager.state.subject == .me(trailhead))
+        await end(poll)
+    }
+
+    /// The other order. The older position is not news of where they are.
+    @Test("a cached significant-change location that arrives after the first fix moves nothing")
+    func aCachedLocationAfterTheFirstFixMovesNothing() async {
+        let poll = Task { await model.pollWeather(policy: .shortFloor) }
+        await letTheLoopStart()
+        deliverFix(at: trailhead)
+        await settleDelegateHop(until: "the hiker's reading is on the badge") { isReading(.me(trailhead)) }
+
+        deliverCachedLocation(at: home, age: Self.cachedLocationAge)
+
+        // Barriers, for the reason `letTheLoopStart()` gives: a delivery
+        // that moves nothing leaves nothing to wait for.
+        await letTheLoopStart()
+        #expect(model.weatherFocus.subject == .me(trailhead))
+        #expect(forecasts.timesAsked(about: home) == 0)
         await end(poll)
     }
 }

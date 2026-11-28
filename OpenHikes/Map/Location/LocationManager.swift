@@ -131,6 +131,10 @@ final class LocationManager: NSObject {
     /// coordinate itself is read in the action that uses it.
     private(set) var hasFix = false
 
+    /// When the receiver took the fix ``coordinate`` is from, for a reader
+    /// weighing it against another feed's — see `OpenHikesModel+Weather.swift`.
+    var fixDate: Date? { latestLocation?.timestamp }
+
     /// What CoreLocation currently allows this app, as the app's own
     /// observable state.
     ///

@@ -45,6 +45,15 @@
 //  a few minutes old, and then says nothing more to a hiker who stays where
 //  they are. That launch drew no weather at all, and cleared the widget's.
 //
+//  **Two feeds say where the hiker is, and the newer fix is where they
+//  are.** What significant-change delivery hands over as it starts can be
+//  minutes older than the first fix, and arrive on either side of it. After
+//  it, it moves nothing. Before it, its request is out or just answered when
+//  the first fix lands, and the floor that keeps a drive from being a burst
+//  of requests refuses the fix one. ``WeatherRequestState`` owes that
+//  movement a request when the floor runs out, so the badge is not left on
+//  the older position's forecast until it expires.
+//
 //  **A request runs beside the loop, not in it.** Awaited in place, a
 //  forecast that stalled for one trail held the loop there: opening another
 //  trail could not move the badge, not even to a reading already cached for
@@ -74,8 +83,10 @@ private enum WeatherWake: Sendable {
     /// A request the loop sent came back — see this file's header.
     case answered(WeatherAnswer)
     /// The hiker asked where they are — see ``WeatherFocus/focusOnHiker(at:)``,
-    /// which has moved the subject already.
-    case asked
+    /// which has moved the subject already. Carries the key of the subject
+    /// the ask was about, which a search or a selection may have replaced by
+    /// the time the loop hears it.
+    case asked(String)
     case expiry
     /// The foreground feed's first fix of the launch — see this file's header.
     case firstFix
@@ -136,7 +147,7 @@ extension OpenHikesModel {
             ),
             merge(
                 dueDates.map { _ in WeatherWake.expiry },
-                weatherFocus.asks().map { _ in WeatherWake.asked },
+                weatherFocus.asks().map { WeatherWake.asked($0) },
                 observedValues { self.weatherAlertSession }
                     .removeDuplicates()
                     .map { _ in WeatherWake.session }
@@ -168,8 +179,8 @@ extension OpenHikesModel {
                 // about where the hiker is now rather than where they were.
                 // Ignore movements that leave a searched place or distant
                 // trail unchanged; those readings still wait for their
-                // freshness deadline.
-                if wake.isHikerPosition, !subjectFollowedTheHiker(as: wake) { continue }
+                // freshness deadline. And an ask the badge has moved on from.
+                if isOvertaken(wake) { continue }
 
                 guard let subject = weatherFocus.subject else {
                     clearBadgeIfRecordingDroppedItsSubject()
@@ -178,7 +189,8 @@ extension OpenHikesModel {
                 }
                 let key = subject.key
                 let isAsking = asking.contains(key)
-                let willRequest = state.shouldRequest(key: key, reason: reason, at: .now, policy: policy) && !isAsking
+                let willRequest = state
+                    .shouldRequest(key: key, reason: reason, at: .now, policy: policy, isAsking: isAsking)
                 // Every pass, not only the ones that fetch: this is what
                 // carries a changed subject — a new city, or `me` with a new
                 // coordinate — to the badge, and what decides between a
@@ -203,18 +215,43 @@ extension OpenHikesModel {
         }
     }
 
+    /// Whether `wake` has nothing left to say about the subject in front.
+    ///
+    /// News of where the hiker is, when it leaves the subject as it was: a
+    /// searched place, a trail they are nowhere near, or a feed whose stream
+    /// is only saying first that it has no position yet. And an ask about a
+    /// subject a search or a selection has since replaced — that one has a
+    /// wake of its own, and is owed a focus's floor, not an ask's.
+    private func isOvertaken(_ wake: WeatherWake) -> Bool {
+        switch wake {
+        case .firstFix, .movement: !subjectFollowedTheHiker()
+        case .asked(let key): weatherFocus.subject?.key != key
+        case .answered, .expiry, .focus, .session: false
+        }
+    }
+
     /// Whether the hiker's position moved the subject: they went far enough,
     /// and the subject is one that follows them — see
     /// ``WeatherFocus/hikerMoved(to:)``.
+    private func subjectFollowedTheHiker() -> Bool {
+        guard let coordinate = newestHikerCoordinate else { return false }
+        return weatherFocus.hikerMoved(to: coordinate)
+    }
+
+    /// Where the hiker is, by whichever feed's fix is the newer — see *Two
+    /// feeds* in this file's header.
     ///
-    /// The position is the one `wake` is news of: the first fix is the
-    /// foreground feed's, and a movement is significant-change delivery's.
-    /// Each feed's stream says first that it has no position yet, which
-    /// moves nothing.
-    private func subjectFollowedTheHiker(as wake: WeatherWake) -> Bool {
-        let position = if case .firstFix = wake { locationManager.coordinate } else { significantLocations.coordinate }
-        guard let position else { return false }
-        return weatherFocus.hikerMoved(to: position)
+    /// Asked for by either feed's wake, so a cached significant-change
+    /// location that arrives after the first fix reads as that fix again,
+    /// and moves nothing. The foreground feed's fix can be the older one
+    /// too: back from the background, it is the position the app left with
+    /// until the receiver has a new one.
+    private var newestHikerCoordinate: CLLocationCoordinate2D? {
+        guard let foreground = locationManager.fixDate else { return significantLocations.coordinate }
+        guard let significant = significantLocations.fixDate, significant > foreground else {
+            return locationManager.coordinate
+        }
+        return significantLocations.coordinate
     }
 
     /// The badge with no subject to be about.
@@ -295,14 +332,6 @@ extension OpenHikesModel {
 }
 
 private extension WeatherWake {
-    /// Whether this is news of where the hiker is.
-    var isHikerPosition: Bool {
-        switch self {
-        case .firstFix, .movement: true
-        case .answered, .asked, .expiry, .focus, .session: false
-        }
-    }
-
     /// `nil` for a wake that is not a reason to ask WeatherKit anything.
     var requestReason: WeatherRequestReason? {
         switch self {

@@ -165,8 +165,9 @@ final class WeatherFocus {
     /// no-ops until it clears.
     private(set) var isPinnedToHiker = false
 
-    /// Where ``focusOnHiker(at:)`` says it was called — see ``asks()``.
-    @ObservationIgnored private let hikerAsks = EventFeed<Void>()
+    /// Where ``focusOnHiker(at:)`` says what it was called about — see
+    /// ``asks()``.
+    @ObservationIgnored private let hikerAsks = EventFeed<String>()
 
     init(subject: WeatherSubject? = nil) {
         self.subject = subject
@@ -240,13 +241,20 @@ final class WeatherFocus {
     /// answer with a newer reading than a focus alone is owed — see
     /// ``WeatherRequestReason/asked``.
     func focusOnHiker(at coordinate: CLLocationCoordinate2D) {
-        setSubject(subject(following: coordinate) ?? .me(coordinate))
-        hikerAsks.send(())
+        let asked = subject(following: coordinate) ?? .me(coordinate)
+        setSubject(asked)
+        hikerAsks.send(asked.key)
     }
 
-    /// Each ``focusOnHiker(at:)`` from now on, for the poll loop to wake on.
-    /// A burst of them is heard as one.
-    func asks() -> AsyncStream<Void> {
+    /// Each ``focusOnHiker(at:)`` from now on, for the poll loop to wake on,
+    /// as the ``WeatherSubject/key`` of the subject it was about. A burst of
+    /// them is heard as one, the newest.
+    ///
+    /// The key, because the poll hears an ask a turn after it was made, and
+    /// a search or a selection can have taken the badge by then. That
+    /// subject did not ask, and is owed a focus's floor rather than an
+    /// ask's.
+    func asks() -> AsyncStream<String> {
         hikerAsks.events(bufferingPolicy: .bufferingNewest(1))
     }
 
@@ -269,8 +277,18 @@ final class WeatherFocus {
     ///
     /// Same shape as ``LocationManager/fixes``, and for the same reason: the
     /// loop should wake when the answer changes rather than ask on a timer.
+    ///
+    /// **Said again when a recording takes the pin or gives it up.** The pin
+    /// changes what an empty subject means and leaves the subject as it was:
+    /// a launch nobody has focused has no subject, and a recording that
+    /// begins there before any fix still has none, but has now dropped
+    /// whatever the badge was drawing. The poll clears the badge for the
+    /// second and not the first, so it has to hear the pin.
     var subjects: some AsyncSequence<WeatherSubject?, Never> & Sendable {
-        observedValues { self.subject }
+        observedValues {
+            _ = self.isPinnedToHiker
+            return self.subject
+        }
     }
 
     /// Assigns only on a real change, so a repeated fix or a re-selection of
