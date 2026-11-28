@@ -37,6 +37,10 @@ private extension WeatherPollingPolicy {
 @MainActor
 @Suite("Weather poll asks", .timeLimit(.minutes(1)))
 struct WeatherPollAskTests {
+    /// How many main-actor round trips the loop is given to take an ask
+    /// that should come to nothing.
+    private static let overtakenRoundTrips = 20
+
     private let here = CLLocationCoordinate2D(latitude: 47.4979, longitude: 19.0402)
     private let chamonix = WeatherSubject.place(
         CLLocationCoordinate2D(latitude: 45.8326, longitude: 6.8652),
@@ -142,6 +146,26 @@ struct WeatherPollAskTests {
 
         await settleDelegateHop(until: "the hiker's reading is on the badge") { isReading(.me(here)) }
         #expect(forecasts.timesAsked(about: here) == 1, "one press is one request, though it woke the loop twice")
+        await end(poll)
+    }
+
+    /// The press and the search land in one turn, so the loop takes the
+    /// press with the searched place already in front. Its reading is a
+    /// moment old: fresh for a focus, and past an ask's floor, which is none.
+    @Test("a press overtaken by a search asks nothing of the searched place")
+    func aPressOvertakenByASearchAsksNothingOfIt() async {
+        let poll = Task { await model.pollWeather(policy: .noFloorUnderAnAsk) }
+        model.weatherFocus.focus(on: chamonix)
+        await settleDelegateHop(until: "the searched place's reading is on the badge") { isReading(chamonix) }
+
+        model.weatherFocus.focusOnHiker(at: here)
+        model.weatherFocus.focus(on: chamonix)
+
+        // Barriers rather than a condition: an ask that is dropped leaves
+        // nothing to wait for. Too few would only cost the case its point.
+        for _ in 0..<Self.overtakenRoundTrips { await settleDelegateHop() }
+        #expect(forecasts.timesAsked(about: chamonix.coordinate) == 1)
+        #expect(forecasts.timesAsked(about: here) == 0)
         await end(poll)
     }
 }

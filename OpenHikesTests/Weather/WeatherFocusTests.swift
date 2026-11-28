@@ -263,8 +263,24 @@ struct WeatherFocusTests {
 
         // Sent before this is awaited, so it is already in the stream. A
         // press that was not heard hangs here, and the time limit says so.
-        await asks.next()
+        let asked = await asks.next()
+        #expect(asked == WeatherSubject.me(budapest).key, "an ask names the subject it was about")
         #expect(focus.subject == .me(budapest))
+    }
+
+    /// The poll hears an ask a turn after it was made, and has to be able to
+    /// tell it is about the trail the hiker is out on rather than `me`.
+    @Test("an ask on the trail they are out on names that trail", .timeLimit(.minutes(1)))
+    func anAskNamesTheTrailItKept() async {
+        let focus = WeatherFocus()
+        let selected = trail(at: budapest)
+        focus.focus(on: selected)
+        var asks = focus.asks().makeAsyncIterator()
+
+        focus.focusOnHiker(at: nearBudapest)
+
+        let asked = await asks.next()
+        #expect(asked == selected.key)
     }
 
     /// The poll loop wakes on every change to `subject`, so re-focusing what

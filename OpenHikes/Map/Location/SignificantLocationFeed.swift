@@ -48,6 +48,12 @@ final class SignificantLocationFeed: NSObject {
 
     private(set) var coordinate: CLLocationCoordinate2D?
 
+    /// When the receiver took the fix ``coordinate`` is from. What this feed
+    /// hands over as it starts is where the system last knew the hiker to
+    /// be, which can be minutes older than a fix the foreground feed already
+    /// holds. Not observed: nothing wakes on it.
+    @ObservationIgnored private(set) var fixDate: Date?
+
     @ObservationIgnored private let monitor: any SignificantLocationMonitor
     @ObservationIgnored private var isMonitoring = false
 
@@ -94,6 +100,7 @@ final class SignificantLocationFeed: NSObject {
             location,
             maximumAge: LocationFixPolicy.backgroundMaximumAge
         ) else { return }
+        fixDate = location.timestamp
         let next = location.coordinate
         if let coordinate,
            coordinate.latitude == next.latitude,
