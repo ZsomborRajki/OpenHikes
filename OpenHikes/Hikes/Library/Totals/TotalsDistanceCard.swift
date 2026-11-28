@@ -8,8 +8,9 @@
 //  It is laid out the way Health lays out a year of anything. The figure
 //  stands over the chart, each year's with a dot in the color its bars are
 //  drawn in, so the figures are the chart's legend as well. A finger on the
-//  chart turns them into the month under it and dims every other month —
-//  see ``TotalsDistanceReadout`` — and lifting it brings the year back.
+//  chart turns them into the month under it, names the month beside the
+//  card's heading and dims every other month — see
+//  ``TotalsDistanceReadout`` — and lifting it brings the year back.
 //
 //  The months are the hiker's calendar's, as many as the two years have —
 //  see ``LibraryTotals`` — and each is named from its own span, so a Hebrew
@@ -35,7 +36,7 @@ struct TotalsDistanceCard: View {
         let readout = TotalsDistanceReadout(totals: totals, selectedKey: selection, locale: locale)
         VStack(alignment: .leading, spacing: Self.figureSpacing) {
             VStack(alignment: .leading, spacing: TotalsMetrics.headingSpacing) {
-                TotalsCardHeading(title: "Distance", systemImage: TotalsGlyph.distance)
+                TotalsCardHeading(title: "Distance", systemImage: TotalsGlyph.distance, detail: readout.month)
                 figures {
                     TotalsYearFigure(side: readout.thisYear, series: .thisYear)
                     if let lastYear = readout.lastYear {
@@ -67,15 +68,35 @@ enum TotalsSeries {
     case lastYear
     case thisYear
 
-    private static let lastYearOpacity = 0.28
+    /// How much of the text color last year's gray is.
+    ///
+    /// Enough to stand 3:1 off the card, the least a bar that carries a
+    /// comparison may (WCAG 2.2, non-text contrast). Measured off the
+    /// screen on iOS 27.2, a bar against the card beside it: 4.2:1 on a
+    /// light sheet pulled up and 4.0:1 at half height, and 3.6:1 on a dark
+    /// sheet pulled up. At 0.28, the first value this had for both, a light
+    /// bar stood 1.7:1 off its card. Light takes more of the text color
+    /// than dark to get there: at half of it a light bar measured 3.06:1.
+    ///
+    /// A dark sheet at half height over a pale map is the one place it
+    /// does not reach: the glass is itself mid-gray there, a bar measures
+    /// 1.6:1 against its card, and so do this year's. No lighter gray can
+    /// stand 3:1 off a mid-gray card, and a darker one would be lost on
+    /// the same sheet pulled up.
+    static func lastYearOpacity(in scheme: ColorScheme) -> Double {
+        scheme == .dark ? darkLastYearOpacity : lightLastYearOpacity
+    }
+
+    private static let lightLastYearOpacity = 0.6
+    private static let darkLastYearOpacity = 0.5
 
     /// Last year's gray is the text color thinned, not a gray of its own.
     /// The sheet is glass until it is pulled up, and over a pale map a dark
     /// sheet's glass is itself mid-gray: bars in `Color.gray` could not be
     /// told from the card they stood on.
-    var color: Color {
+    func color(in scheme: ColorScheme) -> Color {
         switch self {
-        case .lastYear: .primary.opacity(Self.lastYearOpacity)
+        case .lastYear: .primary.opacity(Self.lastYearOpacity(in: scheme))
         case .thisYear: .accentColor
         }
     }
@@ -89,6 +110,8 @@ private struct TotalsYearFigure: View {
 
     let side: TotalsDistanceReadout.Side
     let series: TotalsSeries
+
+    @Environment(\.colorScheme) private var colorScheme
 
     private var figure: String {
         // A dash for a month the year does not have, as every formatter in
@@ -105,7 +128,7 @@ private struct TotalsYearFigure: View {
             )
             HStack(spacing: Self.labelSpacing) {
                 Circle()
-                    .fill(series.color)
+                    .fill(series.color(in: colorScheme))
                     .frame(width: Self.dotSize, height: Self.dotSize)
                     .accessibilityHidden(true)
                 Text(verbatim: side.label)
@@ -143,6 +166,7 @@ private struct TotalsMonthChart: View {
     let totals: LibraryTotals
     @Binding var selection: String?
     @Environment(\.locale) private var locale
+    @Environment(\.colorScheme) private var colorScheme
 
     private struct Bar: Identifiable {
         /// What the bar is plotted against. The x axis is categorical, so a
@@ -163,12 +187,16 @@ private struct TotalsMonthChart: View {
         let months: LibraryTotals.MonthColumn
     }
 
-    private var thisYear: String { String(totals.year) }
-    private var lastYear: String { String(totals.previousYear) }
+    private var thisYear: String { totals.yearName }
+    private var lastYear: String { totals.previousYearName }
 
+    /// Every month either year has, or only this year's for a hiker with
+    /// no last year: a month only last year had would be a column with
+    /// nothing ever in it.
     private var columns: [Column] {
-        totals.monthColumns.compactMap { months in
-            guard let named = months.thisYear ?? months.lastYear else { return nil }
+        let showsLastYear = totals.hasLastYear
+        return totals.monthColumns.compactMap { months in
+            guard let named = months.thisYear ?? (showsLastYear ? months.lastYear : nil) else { return nil }
             return Column(
                 key: months.month.chartKey,
                 label: totals.name(of: named, width: .narrow, locale: locale),
@@ -212,7 +240,10 @@ private struct TotalsMonthChart: View {
             .accessibilityLabel("\(totals.name(of: bar.month, width: .wide, locale: locale)) \(bar.series)")
             .accessibilityValue(TotalsFormat.distance(bar.month.distanceMeters))
         }
-        .chartForegroundStyleScale([lastYear: TotalsSeries.lastYear.color, thisYear: TotalsSeries.thisYear.color])
+        .chartForegroundStyleScale([
+            lastYear: TotalsSeries.lastYear.color(in: colorScheme),
+            thisYear: TotalsSeries.thisYear.color(in: colorScheme),
+        ])
         // The figures over the chart name the two colors.
         .chartLegend(.hidden)
         .emptyChartAxis(top > 0 ? nil : Self.emptyAxisTop)

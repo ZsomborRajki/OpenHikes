@@ -38,7 +38,7 @@ struct TotalsYearTiles: View {
         // `nil` in a hiker's first year: a tile then has nothing under its
         // figure, rather than a year of zeroes.
         let last = totals.hasLastYear ? totals.lastYear : nil
-        let lastYear = String(totals.previousYear)
+        let lastYear = totals.previousYearName
         let climb = TotalsTile(
             id: "climb",
             title: "Climb",
