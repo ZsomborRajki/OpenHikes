@@ -359,13 +359,33 @@ nonisolated struct LibraryTotals: Equatable, Sendable {
         }
     }
 
+    /// Whether anything was walked last year. A hiker in their first year
+    /// has no last year to be held against, and the screen draws none: no
+    /// empty bars beside this year's, and no figure of nothing.
+    var hasLastYear: Bool { lastYear.outings > 0 }
+
     /// Labels use the calendar and zone that made the buckets, and the
     /// reader's current language. A default date style could name a Hebrew
     /// month with its Gregorian name or change calendars after a sum.
     func name(of month: MonthDistance, width: Date.FormatStyle.Symbol.Month, locale: Locale) -> String {
-        let date = month.interval.start.addingTimeInterval(month.interval.duration / 2)
-        let style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone).month(width)
-        return date.formatted(style)
+        Self.middle(of: month).formatted(dateStyle(in: locale).month(width))
+    }
+
+    /// The month with its year, "Mar 2026", which is what the chart's
+    /// readout says of the bar under the finger: the two years' bars stand
+    /// side by side, and each figure names its own.
+    func nameWithYear(of month: MonthDistance, locale: Locale) -> String {
+        Self.middle(of: month).formatted(dateStyle(in: locale).month(.abbreviated).year())
+    }
+
+    private func dateStyle(in locale: Locale) -> Date.FormatStyle {
+        Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+    }
+
+    /// A day well inside the month, so that no zone's offset names it for
+    /// the month on either side.
+    private static func middle(of month: MonthDistance) -> Date {
+        month.interval.start.addingTimeInterval(month.interval.duration / 2)
     }
 
     /// How far beyond the box of what a walk covered a clocked hike's line

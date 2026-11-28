@@ -14,9 +14,14 @@
 //  rules part company. Nothing reads `Locale.current`, so the machine's own
 //  region cannot be the answer.
 //
+//  With it, the rest of what `TotalsFormat` spells: nothing walked, a line
+//  of the chart's axis, and a figure as it is drawn and as it is spoken.
+//
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesData
+import RealModule
 import Testing
 
 @Suite("Library totals units")
@@ -47,6 +52,52 @@ struct LibraryTotalsUnitTests {
             (unit.symbol == UnitLength.kilometers.symbol) == (tile == Self.inKilometers(locale)),
             "\(identifier) wrote \"\(tile)\" over a chart in \(unit.symbol)"
         )
+    }
+
+    /// A month nothing was walked in is read off a chart whose axis starts
+    /// at "0 km". A road sign's rule writes nothing as "0 m", or "0 ft",
+    /// which is neither the chart's unit nor the unit of the year beside it.
+    @Test(
+        "nothing walked is written in the chart's unit",
+        arguments: ["en_US", "en_GB", "de_DE", "ja_JP", "en_LR", "my_MM"]
+    )
+    func nothingWalked(identifier: String) {
+        let locale = Locale(identifier: identifier)
+        let unit = TotalsFormat.chartUnit(in: locale)
+        #expect(TotalsFormat.distance(0, locale: locale) == TotalsFormat.axisDistance(0, in: unit, locale: locale))
+    }
+
+    @Test("a line of the chart's axis is written with its unit")
+    func axisLines() {
+        #expect(TotalsFormat.axisDistance(150, in: .kilometers, locale: Locale(identifier: "de_DE")) == "150 km")
+        #expect(TotalsFormat.axisDistance(1500, in: .kilometers, locale: Locale(identifier: "en_US")) == "1,500 km")
+        #expect(TotalsFormat.axisDistance(0.5, in: .miles, locale: Locale(identifier: "en_US")) == "0.5 mi")
+    }
+
+    @Test("a bar is as tall as its distance in the chart's unit")
+    func chartValues() {
+        #expect(TotalsFormat.chartValue(5000, in: .kilometers) == 5)
+        #expect(TotalsFormat.chartValue(1609.344, in: .miles).isApproximatelyEqual(to: 1, absoluteTolerance: 1e-9))
+    }
+
+    /// "225h 45m" is what a tile has room for and what VoiceOver misreads,
+    /// so a duration is the one figure spoken otherwise than it is drawn.
+    @Test("only a duration is read aloud otherwise than it is drawn")
+    func readings() {
+        let duration = TotalsReading.duration(812_700)
+        #expect(duration.drawn == HikeFormat.duration(812_700))
+        #expect(duration.spoken == HikeFormat.spokenDuration(812_700))
+        #expect(duration.drawn != duration.spoken)
+
+        let distance = TotalsReading.distance(5000)
+        #expect(distance.drawn == TotalsFormat.distance(5000))
+        #expect(distance.spoken == distance.drawn)
+        let height = TotalsReading.height(1250)
+        #expect(height.drawn == TotalsFormat.height(1250))
+        #expect(height.spoken == height.drawn)
+        let count = TotalsReading.count(42)
+        #expect(count.drawn == 42.formatted())
+        #expect(count.spoken == count.drawn)
     }
 
     /// The pair the old rule got wrong, with the measurement system asserted

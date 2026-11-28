@@ -278,6 +278,18 @@
 # words, the chance of rain, the UV scale and "feels like" are
 # `WeatherReadingFormat`'s and `WeatherConditions`' (`WeatherPanelFiguresTests`).
 #
+# Four arrived when *Totals* was redrawn as cards: the card, its headings and
+# the figure in two sizes (`TotalsCard`), the year's distance over its month
+# chart (`TotalsDistanceCard`), the year's four tiles (`TotalsTiles`), and the
+# rows of everything walked and of the records (`TotalsRowCards`), all body
+# code. What they draw stays measured: the sums are `LibraryTotals`', the
+# spelling of a figure is `TotalsFormat`'s (`LibraryTotalsUnitTests`), where
+# its number ends and its unit begins is `TotalsFigureRuns`'
+# (`TotalsFigureRunsTests`), and what stands over the chart, with a finger on
+# it or without, is `TotalsDistanceReadout`'s (`TotalsDistanceReadoutTests`).
+# `LibraryTotalsView`, the screen itself, was never listed and is not now:
+# it reads the library and opens a record's hike.
+#
 # The UI suites still exist and still run locally:
 #
 #   Scripts/run-ui-tests.sh --all
@@ -409,3 +421,7 @@ OpenHikes/Weather/Detail/WeatherWindCard.swift
 OpenHikes/Weather/Detail/WeatherDaylightCard.swift
 OpenHikes/Weather/Detail/WeatherReadingTiles.swift
 OpenHikes/Weather/Detail/WeatherNotices.swift
+OpenHikes/Hikes/Library/Totals/TotalsCard.swift
+OpenHikes/Hikes/Library/Totals/TotalsDistanceCard.swift
+OpenHikes/Hikes/Library/Totals/TotalsTiles.swift
+OpenHikes/Hikes/Library/Totals/TotalsRowCards.swift
