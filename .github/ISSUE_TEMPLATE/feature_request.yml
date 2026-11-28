@@ -3,33 +3,10 @@ description: Something the app should do and does not.
 labels:
   - enhancement
 body:
-  - type: markdown
-    attributes:
-      value: >-
-        OpenHikes has a deliberate scope: local-first, iPhone and iPad with an
-        Apple Watch companion, and no OpenHikes account. `AGENTS.md` records the
-        decisions that have already been settled, and the open issues are what
-        is already planned — both worth a look before writing.
-
   - type: textarea
-    id: problem
+    id: idea
     attributes:
-      label: What are you trying to do
-      description: >-
-        The problem rather than the solution. What are you doing on a walk that
-        the app makes hard?
+      label: What would you like the app to do
+      description: The problem you hit on a walk helps more than a finished design.
     validations:
       required: true
-
-  - type: textarea
-    id: proposal
-    attributes:
-      label: What you would like it to do
-    validations:
-      required: true
-
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: What you do instead today
-      description: Another app, a workaround, or nothing.
