@@ -187,6 +187,11 @@ struct MapView: MapViewRepresentable, Equatable {
     /// dragged along the line re-renders no view — see `MapRouteTrim.swift`.
     /// `nil` in a suite that is not about it.
     var routeTrim: RouteTrimPreview?
+    /// Told when the map turns to follow the hiker, which makes them what
+    /// the weather badge is about. Handed over in the direction
+    /// ``drawnRouteTap`` is — see ``Coordinator/focusWeather(following:hikerAt:)``.
+    /// `nil` in a suite that is not about it.
+    var weatherFocus: WeatherFocus?
 
     /// How far the landscape side panel reaches in from the leading edge, or
     /// zero in portrait where there is no panel and the sheet is over the map
@@ -246,6 +251,7 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.searchCompleter = searchCompleter
         coordinator.drawnRouteTap = drawnRouteTap
         coordinator.locationAccessPrompt = locationAccessPrompt
+        coordinator.weatherFocus = weatherFocus
         // The map asks the community question and now draws its answer too —
         // see ``MapCommunityAnnotations``. Observed here rather than handed
         // down, so a nearby result landing moves MapKit's annotations and no
@@ -913,6 +919,7 @@ extension MapView {
             && lhs.junctionGuide === rhs.junctionGuide
             && lhs.countryOutlines === rhs.countryOutlines
             && lhs.routeTrim === rhs.routeTrim
+            && lhs.weatherFocus === rhs.weatherFocus
             && lhs.sidePanelInset == rhs.sidePanelInset
             && lhs.isCoveredByPanel == rhs.isCoveredByPanel
     }

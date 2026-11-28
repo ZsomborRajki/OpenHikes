@@ -16,7 +16,9 @@
 //  The other change is that *why* a request is being considered now matters.
 //  A hiker who has just searched for a city is owed an answer immediately; a
 //  significant-change event is worth a request but not an unlimited number of
-//  them; a reading that has simply expired can wait for its deadline. One
+//  them; a hiker who asks where they are is looking at the badge for the
+//  answer, and is owed a newer one than a reading that is merely not old
+//  yet; a reading that has simply expired can wait for its deadline. One
 //  floor per reason, in ``minimumInterval(for:policy:)``, is the whole of it.
 //
 
@@ -33,13 +35,15 @@ nonisolated struct WeatherPollingPolicy: Sendable {
     /// How long a successful reading counts as current. Also the floor under
     /// requests driven by focus and by expiry.
     let freshnessInterval: TimeInterval
-    /// The floor under movement-driven requests.
+    /// The floor under requests the hiker's movement asks for, and under
+    /// the ones they ask for themselves at the map's location button.
     ///
     /// Significant-change delivery is already coarse — hundreds of metres at
     /// best, and cell-handoff driven rather than distance driven — so this is
     /// not there to thin out a stream that arrives too fast. It is there so a
     /// burst of events during a drive, or a receiver flapping between two
-    /// cells, cannot turn into a burst of metered requests.
+    /// cells, cannot turn into a burst of metered requests. A button pressed
+    /// over and over is the same burst by hand.
     let minimumRequestInterval: TimeInterval
     let retryDelays: [TimeInterval]
 
@@ -52,6 +56,11 @@ nonisolated struct WeatherPollingPolicy: Sendable {
 /// Why a request is being considered. Decides how long since the last one is
 /// long enough; see ``WeatherRequestState/shouldRequest(key:reason:at:policy:)``.
 nonisolated enum WeatherRequestReason: Sendable {
+    /// The hiker asked where they are, at the map's location button — see
+    /// ``WeatherFocus/focusOnHiker(at:)``. They are looking at the badge for
+    /// the answer, so a reading a focus would still call fresh is asked for
+    /// again once it is older than the movement floor.
+    case asked
     /// The reading for the current subject reached its freshness deadline
     /// with nothing else having happened.
     case expiry
@@ -102,9 +111,9 @@ nonisolated struct WeatherRequestState: Sendable {
         // A failure's backoff is honoured whatever the reason, including a
         // fresh search. When WeatherKit is refusing — a bad entitlement, a
         // rate limit, no signal — a user retrying by hand is exactly the case
-        // the ladder exists for, and letting `.focus` past it would turn the
-        // search field into a way to hammer a service that has already said no
-        // four times.
+        // the ladder exists for, and letting `.focus` or `.asked` past it
+        // would turn the search field, or the location button, into a way to
+        // hammer a service that has already said no four times.
         if let nextAttempt = existing.nextAttempt { return now >= nextAttempt }
 
         guard let lastSuccess = existing.lastSuccess else { return true }
@@ -117,7 +126,7 @@ nonisolated struct WeatherRequestState: Sendable {
     ) -> TimeInterval {
         switch reason {
         case .focus, .expiry: policy.freshnessInterval
-        case .movement: policy.minimumRequestInterval
+        case .movement, .asked: policy.minimumRequestInterval
         }
     }
 

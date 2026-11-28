@@ -14,11 +14,12 @@
 //  down.
 //
 //  So this is the written-down version. ``WeatherFocus`` holds one subject at
-//  a time and three call sites set it:
+//  a time and four call sites set it:
 //
 //  - the recorder, when a recording becomes active (`OpenHikesView`)
 //  - hike selection, when a route is drawn and the map fits to it
 //  - search, when `MKLocalSearch` resolves and the map zooms to a region
+//  - the map's location button, when the map turns to follow the hiker
 //
 //  Everything downstream — when to spend a WeatherKit request, what the badge
 //  draws, what its VoiceOver value says — is a function of the subject rather
@@ -164,6 +165,9 @@ final class WeatherFocus {
     /// no-ops until it clears.
     private(set) var isPinnedToHiker = false
 
+    /// Where ``focusOnHiker(at:)`` says it was called — see ``asks()``.
+    @ObservationIgnored private let hikerAsks = EventFeed<Void>()
+
     init(subject: WeatherSubject? = nil) {
         self.subject = subject
     }
@@ -215,22 +219,50 @@ final class WeatherFocus {
     /// Returns whether the subject changed, so irrelevant movement cannot
     /// receive the poll loop's shorter request floor.
     @discardableResult func hikerMoved(to coordinate: CLLocationCoordinate2D) -> Bool {
+        guard let next = subject(following: coordinate) else { return false }
         let previous = subject
-        if isPinnedToHiker || subject == nil {
-            setSubject(.me(coordinate))
-            return subject != previous
-        }
-        guard let subject else { return false }
+        setSubject(next)
+        return subject != previous
+    }
+
+    /// The hiker asked where they are: the map turned to follow them, at its
+    /// location button or because a recording's screen asked it to.
+    ///
+    /// An explicit focus, as a search or a selection is, so it takes the
+    /// badge from either: a hiker reading about a trail in another country
+    /// who asks for here is asking about here. A subject that follows the
+    /// hiker already is brought to where they stand and stays what it is —
+    /// the trail they are out on keeps the badge, as it does when they move.
+    ///
+    /// **And an ask, heard even when it changes nothing.** Most presses find
+    /// the subject already the hiker, standing where they stood, and
+    /// ``subjects`` says nothing then. ``asks()`` does, so the poll can
+    /// answer with a newer reading than a focus alone is owed — see
+    /// ``WeatherRequestReason/asked``.
+    func focusOnHiker(at coordinate: CLLocationCoordinate2D) {
+        setSubject(subject(following: coordinate) ?? .me(coordinate))
+        hikerAsks.send(())
+    }
+
+    /// Each ``focusOnHiker(at:)`` from now on, for the poll loop to wake on.
+    /// A burst of them is heard as one.
+    func asks() -> AsyncStream<Void> {
+        hikerAsks.events(bufferingPolicy: .bufferingNewest(1))
+    }
+
+    /// What the subject is with the hiker at `coordinate`, or `nil` when it
+    /// is not about them: a searched place, or a trail they are nowhere near.
+    private func subject(following coordinate: CLLocationCoordinate2D) -> WeatherSubject? {
+        guard !isPinnedToHiker, let subject else { return .me(coordinate) }
         switch subject {
         case .me:
-            setSubject(.me(coordinate))
+            return .me(coordinate)
         case .trail(let anchor, _, _):
-            guard Self.distance(from: anchor, to: coordinate) <= Self.trailFollowRadius else { return false }
-            setSubject(subject.moved(to: coordinate))
+            guard Self.distance(from: anchor, to: coordinate) <= Self.trailFollowRadius else { return nil }
+            return subject.moved(to: coordinate)
         case .place:
-            return false
+            return nil
         }
-        return self.subject != previous
     }
 
     /// The subject as an async sequence, for the poll loop to wake on.
